@@ -53,3 +53,49 @@ const createfeedbacktable = `CREATE TABLE IF NOT EXISTS feedback (
     FOREIGN KEY (serviceid) REFERENCES services (id),
     FOREIGN KEY (userid) REFERENCES user(id)
     );`
+//running database tables
+db.serialize(() => { 
+    db.exec(createusertable, (err) => {
+        if (err) {
+            console.error("Error creating user table:", err);
+        } else {
+            console.log("User table created successfully!");
+        }
+    });
+    db.exec(createpettable, (err) => {
+        if (err) {
+            console.error("Error creating pets table:", err.message);
+        } else {
+            console.log("Pets table created successfully!");
+        }
+    });
+
+    db.exec(createservicestable, (err) => {
+      if (err) {
+        console.error("Error creating the table:", err.message);
+      } else {
+        console.log("Services table created successfully!");
+      }
+    });
+
+    db.exec(createappointmentstable, (err) => {
+      if (err) {
+        console.error("Error creating the table:", err.message);
+      } else {
+        console.log("Appointments table created successfully!");
+      }
+    });
+
+    db.exec(createfeedbacktable, (err) => {
+      if (err) {
+        console.error("Error creating the table:", err.message);
+      } else {
+        console.log("Feedback table created successfully!");
+      }
+    });
+
+});
+
+
+
+module.exports = { db, createusertable, createpettable, createservicestable, createappointmentstable,createfeedbacktable};
