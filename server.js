@@ -51,6 +51,24 @@ server.post('/user/login', (req, res) => {
     });
 });
 
+// Get all users
+server.get('/users', (req, res) => {
+    const getAllUsersQuery = `SELECT * FROM user`;
+
+    db.all(getAllUsersQuery, [], (err, rows) => {
+        if (err) {
+            console.error("Database error:", err);
+            return res.status(500).send("An error occurred while retrieving users.");
+        }
+
+        if (rows.length === 0) {
+            return res.status(404).send("No users found.");
+        } else {
+            return res.status(200).json(rows); 
+        }
+    });
+});
+
 //user deleting account
 server.delete('/user/account/delete/:id', (req, res) => {
     let userid= parseInt(req.params.id,10); 
@@ -105,6 +123,35 @@ server.put('/user/account/edit/:id', (req, res) => {
         }
 
         return res.status(200).send('Account updated successfully.');
+    });
+});
+//PETT
+//creating pet profile
+server.post('/pets/createprofile', (req, res) => {
+    let name = req.body.name;
+    let age = req.body.age;
+    let vaccinationdates = req.body.vaccinationdates;
+    let healthnotes = req.body.healthnotes;
+    let breed =req.body.breed;
+
+    if (!name || !age || !breed) {
+        return res.status(400).json({ message: "Missing required fields: name, age and breed" });
+    }
+    if (typeof age !== 'number' || age < 0) {
+        return res.status(400).json({ message: "Invalid age" });
+    }
+
+    const insertquery = `INSERT INTO PET (name, age, vaccinationdates, healthnotes, breed)VALUES ('${name}','${age}','${vaccinationdates}','${healthnotes}', '${breed}')`;
+
+    db.run(insertquery, (err) => {
+        if (err) {
+            console.error("Error inserting pet profile:", err.message);
+            return res.status(500).json({ message: "Failed to create pet profile" });
+        }
+
+        res.status(201).json({
+            message: "Pet profile created successfully",
+        });
     });
 });
 
