@@ -137,6 +137,73 @@ server.post('/pets/createprofile', (req, res) => {
     });
 });
 
+//deleting pet profile
+server.delete('/user/pets/delete/:id', (req, res) => {
+    let petid= parseInt(req.params.id, 10);
+
+    const query = `DELETE FROM pet WHERE id = ${petid}`;
+    db.run(query, (err) =>{
+        if (err) {
+            return res.status(500).send('Error deleting pet account');
+        }
+        res.status(200).send('Pet account deleted successfully');
+    });
+});
+
+//user editing pets profile
+server.put('/user/pets/edit/:id', (req, res) => {
+    const petid  =parseInt(req.params.id,10);
+    let name = req.body.name;
+    let age = req.body.age;
+    let vaccinationdates = req.body.vaccinationdates;
+    let healthnotes = req.body.healthnotes;
+    let breed= req.body.breed;
+
+    if (!name && !breed && !age && !healthnotes && !vaccinationdates) {
+        return res.status(400).send('At least one field required (Name, breed, age, vaccination dates, healthnotes)');
+    }
+    const updates=[];
+    const values=[];
+    if (name) {
+        updates.push("name = ?");
+        values.push(name);
+    }
+    if (breed) {
+        updates.push("breed = ?");
+        values.push(breed);
+    }
+    if (age) {
+        updates.push("age = ?");
+        values.push(age);
+    }
+    if (healthnotes) {
+        updates.push("healthnotes = ?");
+        values.push(healthnotes);
+    }
+    if (vaccinationdates) {
+        updates.push("vaccinationdates = ?");
+        values.push(vaccinationdates);
+    }
+
+    const query = `UPDATE pet SET ${updates.join(', ')} WHERE id = ?`;
+    values.push(petid); 
+
+    db.run(query, values, function (err) {
+        if (err) {
+            console.error(err);
+            return res.status(500).send('Error updating account.',(err));
+        }
+
+        if (this.changes === 0) {
+            return res.status(404).send('pet profile not found or no changes made.');
+        }
+
+        return res.status(200).send('Account updated successfully.');
+    });
+});
+
+
+
 //starting server  
 server.listen(port, () => {
     console.log(`Server is listening at port ${port}`);
