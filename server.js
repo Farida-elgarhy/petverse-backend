@@ -51,6 +51,62 @@ server.post('/user/login', (req, res) => {
     });
 });
 
+//user deleting account
+server.delete('/user/account/delete/:id', (req, res) => {
+    let userid= parseInt(req.params.id,10); 
+    
+    const query = `DELETE FROM user WHERE id = ${userid}`;
+    db.run(query, (err) => {
+        if (err) {
+            return res.status(500).send('Error deleting account');
+        }
+        res.status(200).send('Account deleted successfully');
+    });
+});
+
+//user editing account
+server.put('/user/account/edit/:id', (req, res) => {
+    let name= req.body.name;
+    let email= req.body.email;
+    let password = req.body.password;
+    const userId = parseInt(req.params.id,10);
+
+    if (!name && !email && !password) {
+        return res.status(400).send('At least one field (name, email, or password) must be provided.');
+    }
+
+    const updates = [];
+    const values = [];
+
+    if (name) {
+        updates.push("name = ?");
+        values.push(name);
+    }
+    if (email) {
+        updates.push("email = ?");
+        values.push(email);
+    }
+    if (password) {
+        updates.push("password = ?");
+        values.push(password);
+    }
+
+    const query = `UPDATE user SET ${updates.join(', ')} WHERE id = ?`;
+    values.push(userId); 
+
+    db.run(query, values, function (err) {
+        if (err) {
+            console.error(err);
+            return res.status(500).send('Error updating account.',(err));
+        }
+
+        if (this.changes === 0) {
+            return res.status(404).send('User not found or no changes made.');
+        }
+
+        return res.status(200).send('Account updated successfully.');
+    });
+});
 
 //starting server  
 server.listen(port, () => {
