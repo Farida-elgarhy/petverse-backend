@@ -26,6 +26,35 @@ server.post('/user/register', (req, res) => {
     })
 })
 
+//PETT
+//creating pet profile
+server.post('/pets/createprofile', (req, res) => {
+    let name = req.body.name;
+    let age = req.body.age;
+    let vaccinationdates = req.body.vaccinationdates;
+    let healthnotes = req.body.healthnotes;
+    let breed =req.body.breed;
+
+    if (!name || !age || !breed) {
+        return res.status(400).json({ message: "Missing required fields: name, age and breed" });
+    }
+    if (typeof age !== 'number' || age < 0) {
+        return res.status(400).json({ message: "Invalid age" });
+    }
+
+    const insertquery = `INSERT INTO PET (name, age, vaccinationdates, healthnotes, breed)VALUES ('${name}','${age}','${vaccinationdates}','${healthnotes}', '${breed}')`;
+
+    db.run(insertquery, (err) => {
+        if (err) {
+            console.error("Error inserting pet profile:", err.message);
+            return res.status(500).json({ message: "Failed to create pet profile" });
+        }
+
+        res.status(201).json({
+            message: "Pet profile created successfully",
+        });
+    });
+});
 
 //starting server  
 server.listen(port, () => {
