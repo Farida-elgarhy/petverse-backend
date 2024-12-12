@@ -433,6 +433,29 @@ server.get(`/admin/feedback`, (req, res) => {
     });
 });
 
+//APPOINTMENTS  
+//displaying all the appointments
+server.get('/appointments/available/:serviceid', (req, res) => {
+    const { serviceid } = req.params;
+    const availableslotsquery = `SELECT availableslots FROM services WHERE id>0`;
+    db.get(query, [serviceid], (err, row) => {
+        if (err) {
+            console.log(err);
+            return res.status(500).send("failed to get available slots");
+        }
+        if (!row) {
+            return res.status(404).send("service not found")
+
+        }
+        else {
+            let availableslots = [];
+            if (row.availableslots) {
+                availableslots = row.availableslots.split(',');
+            }
+            return res.status(200).json({ availableslots })
+        }
+    });
+});
 
 //starting server  
 server.listen(port, () => {
