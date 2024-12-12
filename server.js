@@ -362,6 +362,78 @@ server.post('/admin/services/add', (req, res) => {
         });
     });
 });
+
+//service feedback
+server.post('/services/:serviceId/feedback', (req, res) => {
+    let serviceid = req.params.serviceid;
+    let userid = req.params.userid;
+    let rating = req.body.rating;
+    let comment = req.body.comment;
+
+    if (!userid || !rating || typeof rating !== 'number' || rating < 1 || rating > 5) {
+        return res.status(400).json({ message: "Invalid input. Ensure 'userId', 'rating' (1-5)" });
+    }
+
+    const feedbackQuery = `
+        INSERT INTO feedback (userid, serviceid, rating, comment)
+        VALUES ('${userid}', '${serviceid}', '${rating}', '${comment}')
+    `;
+
+    db.run(feedbackQuery, (err) =>{
+        if (err) {
+            console.error("Error inserting feedback:", err.message);
+            return res.status(500).json({ message: "Failed to submit feedback" });
+        }
+
+        return res.status(200).json({ message: "Feedback submitted successfully" });
+    });
+});
+// user feedback for the website
+server.post('/user/feedback', (req, res) => {
+    let rating = req.body.rating;
+    let comment = req.body.comment;
+    let email = req.body.email
+
+    if (!rating) {
+        return res.status(400).json({
+            message: "Rating is required."
+        });
+    }
+
+    const feedbackQuery = `INSERT INTO feedback (rating, comment, email) VALUES ('${email}', '${rating}', '${comment}')`;
+
+    db.run(feedbackQuery, (err) => {
+        if (err) {
+            console.error('Error submitting feedback:', err.message);
+            return res.status(500).json({
+            message: "There was an error submitting your feedback. Please try again later."
+            });
+        }
+
+        return res.status(200).json({
+            message: "Thank you for your feedback!"
+        });
+    });
+});
+
+
+//admin getting all the feedbacks
+server.get(`/admin/feedback`, (req, res) => {
+    const feedbackquery = `SELECT * FROM feedback`
+    db.all(feedbackquery, (err, rows) => {
+        if (err) {
+            console.error('Error fetching feedback:', err.message);
+            return res.status(500).json({
+                message: "Error fetching feedback data. Please try again later."
+            });
+        }
+
+        else
+            return res.json(rows)
+    });
+});
+
+
 //starting server  
 server.listen(port, () => {
     console.log(`Server is listening at port ${port}`);
