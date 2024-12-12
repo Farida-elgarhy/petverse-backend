@@ -236,7 +236,20 @@ server.get('/petprofiles', (req,res)=>{
         }
     });
 });
+//getting all services
+server.get('/admin/services', (req, res) => {
+    let type= req.query.type;
+    let location= req.query.location;
+    let rating= req.query.rating;
 
+    const query = 'SELECT * FROM services';
+    db.all(query,(err, rows) => {
+        if (err) {
+            return res.status(500).send('Error fetching services');
+        }
+        res.status(200).json(rows);
+    });
+});
 //starting server  
 server.listen(port, () => {
     console.log(`Server is listening at port ${port}`);
