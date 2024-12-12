@@ -309,6 +309,59 @@ server.get('/admin/services', (req, res) => {
         res.status(200).json(rows);
     });
 });
+
+//admin updating a service based on id
+server.put('/admin/services/update/:serviceid', (req, res) => {
+    const { serviceid } = req.params;
+    let name = req.body.name;
+    let type = req.body.type;
+    let provider = req.body.provider;
+    let location = req.body.location;
+    let cost = req.body.cost;
+    let rating = req.body.rating;
+    const query = `UPDATE services SET name = '${name}', type = '${type}', provider = '${provider}', location = '${location}', cost = '${cost}', rating = '${rating}' WHERE id = '${serviceid}'`;
+
+    db.run(query, [name, type, provider, location, cost, rating, serviceid],(err)=> {
+        if (err) {
+            return res.status(500).send('Error updating service');
+        }
+        res.status(200).send('Service updated successfully');
+    });
+});
+
+//admin deleting a service using its id
+server.delete('/admin/services/delete/:serviceid', (req, res) => {
+    const { serviceid } = req.params;
+    const query = `DELETE FROM services WHERE id = ${serviceid}`;
+
+    db.run(query, [serviceid], (err)=> {
+        if (err) {
+            return res.status(500).send('Error deleting service');
+        }
+        res.status(200).send('Service deleted successfully');
+    });
+});
+
+//adding service
+server.post('/admin/services/add', (req, res) => {
+    let name = req.body.name;
+    let type = req.body.type;
+    let provider = req.body.provider;
+    let location = req.body.location;
+    let cost = req.body.cost;
+    let rating = req.body.rating;
+    const query = `INSERT INTO services (name, type, provider, location, cost, rating) VALUES ('${name}','${type}','${provider}','${location}','${cost}','${rating}')`;
+
+    db.run(query, [name, type, provider, location, cost, rating],  (err) =>{
+        if (err) {
+            return res.status(500).send('Error creating service');
+        }
+        res.status(201).json({
+            message: 'Service created successfully',
+            serviceId: this.lastID
+        });
+    });
+});
 //starting server  
 server.listen(port, () => {
     console.log(`Server is listening at port ${port}`);
