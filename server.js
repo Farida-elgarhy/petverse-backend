@@ -124,6 +124,7 @@ server.get('/users', (req, res) => {
         }
     });
 });
+
 //PETT
 //creating pet profile
 server.post('/pets/createprofile', (req, res) => {
@@ -236,6 +237,64 @@ server.get('/petprofiles', (req,res)=>{
         }
     });
 });
+
+//SERVICES
+//services search
+server.get('/services/search', (req, res) => {
+    let type = req.query.type;
+    let name = req.query.name;
+    let rating = req.query.rating;
+    let contact = req.query.contact;
+    let location = req.query.location;
+
+    if (!type && !location && !rating && !name) {
+        return res.status(400).send("choose at least one filter");
+    }
+
+    const searchquery = `SELECT * FROM services WHERE QUANTITY > 0`
+
+    if (type) {
+        searchquery += `AND TYPE= '${type}'`;
+    };
+    if (name) {
+        searchquery += `AND NAME= '${name}'`;
+    };
+    if (location) {
+        searchquery += `AND LOCATION = '${location}'`;
+    }
+
+    if (rating) {
+        searchquery += `AND RATING = '${rating}'`;
+
+    }
+
+    console.log("Search Results: ", searchquery);
+    db.all(searchquery, (err, rows) => {
+        if (err) {
+            console.error("Error fetching services:", err.message);
+            return res.status(500).send("Failed to fetch services.");
+        }
+
+        return res.status(200).json({ services: rows });
+    });
+});
+
+
+//searching services by their id 
+server.get('/services/search/:serviceid', (req, res) => {
+    const servicesquery = `SELECT * FROM services WHERE id=${req.params.id}`
+    db.get(servicesquery, (err, row) => {
+        if (err) {
+            console.log(err);
+            return res.status(500).send('Error fetching service details');
+        }
+        if (!row) {
+            return res.status(404).send(`Service with id = ${serviceid} not found`);
+        }
+        return res.status(200).json(row);
+    });
+});
+
 //getting all services
 server.get('/admin/services', (req, res) => {
     let type= req.query.type;
