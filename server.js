@@ -12,9 +12,18 @@ server.post('/user/register', (req, res) => {
     let email = req.body.email;
     let password = req.body.password;
     let age= req.body.age;
-    if (!name || !email || !password) {
-        return res.status(400).send("name, email, and password are required.");
-    }
+    if (!name || !email || !password || !role) {
+        return res.status(400).send("name, email,role, and password are required.");
+    };
+    const checkemailquery=`Select * FROM USER WHERE email='${email}'`;
+    db.get(checkemailquery, (err,row)=>{
+        if (err){
+            return res.status(500).send("error checking email")
+        }
+        if (row){
+            return res.status(400).send("email already registered, please login")
+        }
+    })
     const insertquery = `INSERT INTO USER(name,email,password)Values('${name}','${email}','${password}')`;
     db.run(insertquery, (err) => {
         if (err) {
