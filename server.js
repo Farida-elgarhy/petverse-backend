@@ -61,7 +61,7 @@ server.delete('/user/account/delete/:id', (req, res) => {
             return res.status(500).send('Error deleting account');
         }
         res.status(200).send('Account deleted successfully');
-    });
+    }); 
 });
 
 //user editing account
