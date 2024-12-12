@@ -107,6 +107,23 @@ server.put('/user/account/edit/:id', (req, res) => {
         return res.status(200).send('Account updated successfully.');
     });
 });
+// // Get all users
+server.get('/users', (req, res) => {
+    const getAllUsersQuery = `SELECT * FROM user`;
+
+    db.all(getAllUsersQuery, [], (err, rows) => {
+        if (err) {
+            console.error("Database error:", err);
+            return res.status(500).send("An error occurred while retrieving users.");
+        }
+
+        if (rows.length === 0) {
+            return res.status(404).send("No users found.");
+        } else {
+            return res.status(200).json(rows); 
+        }
+    });
+});
 //PETT
 //creating pet profile
 server.post('/pets/createprofile', (req, res) => {
@@ -202,7 +219,23 @@ server.put('/user/pets/edit/:id', (req, res) => {
     });
 });
 
+//get all pet profiles
+server.get('/petprofiles', (req,res)=>{
+    const getallpetsquery= `SELECT * FROM pet`;
 
+    db.all(getallpetsquery, [], (err,rows)=>{
+        if (err){
+            console.log("Database error:", err);
+            return res.status(500).send("An error occured while retrieving pet profiles.");
+        }
+        if(rows.length==0){
+            return res.status(404).send("No pet profiles found");
+        }
+        else{
+            res.status(200).json(rows);
+        }
+    });
+});
 
 //starting server  
 server.listen(port, () => {
