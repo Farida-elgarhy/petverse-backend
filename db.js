@@ -128,14 +128,6 @@ db.serialize(() => {
         }
     });
 
-    // db.exec(createservicestable, (err) => {
-    //   if (err) {
-    //     console.error("Error creating the table:", err.message);
-    //   } else {
-    //     console.log("Services table created successfully!");
-    //   }
-    // });
-
     db.exec(createappointmentstable, (err) => {
       if (err) {
         console.error("Error creating the table:", err.message);
