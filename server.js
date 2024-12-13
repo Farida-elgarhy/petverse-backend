@@ -1,9 +1,14 @@
 const express = require('express');
+const cors = require('cors');
 const db_access = require('./db.js');
 const db = db_access.db;
 const server = express();
 const port = 8888;
 server.use(express.json());
+server.use(cors({
+    origin:"http://localhost:3000",
+    credentials:true
+}))
 
 //USERR
 //registration
