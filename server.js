@@ -242,63 +242,6 @@ server.get('/petprofiles', (req,res)=>{
     });
 });
 
-// //SERVICES
-// //services search
-// server.get('/services/search', (req, res) => {
-//     let type = req.query.type;
-//     let name = req.query.name;
-//     let rating = req.query.rating;
-//     let contact = req.query.contact;
-//     let location = req.query.location;
-
-//     if (!type && !location && !rating && !name) {
-//         return res.status(400).send("choose at least one filter");
-//     }
-
-//     const searchquery = `SELECT * FROM services WHERE QUANTITY > 0`
-
-//     if (type) {
-//         searchquery += `AND TYPE= '${type}'`;
-//     };
-//     if (name) {
-//         searchquery += `AND NAME= '${name}'`;
-//     };
-//     if (location) {
-//         searchquery += `AND LOCATION = '${location}'`;
-//     }
-
-//     if (rating) {
-//         searchquery += `AND RATING = '${rating}'`;
-
-//     }
-
-//     console.log("Search Results: ", searchquery);
-//     db.all(searchquery, (err, rows) => {
-//         if (err) {
-//             console.error("Error fetching services:", err.message);
-//             return res.status(500).send("Failed to fetch services.");
-//         }
-
-//         return res.status(200).json({ services: rows });
-//     });
-// });
-
-
-//searching services by their id 
-// server.get('/services/search/:serviceid', (req, res) => {
-//     const servicesquery = `SELECT * FROM services WHERE id=${req.params.id}`
-//     db.get(servicesquery, (err, row) => {
-//         if (err) {
-//             console.log(err);
-//             return res.status(500).send('Error fetching service details');
-//         }
-//         if (!row) {
-//             return res.status(404).send(`Service with id = ${serviceid} not found`);
-//         }
-//         return res.status(200).json(row);
-//     });
-// });
-
 //getting all vets
 server.get('/vets', (req, res) => {
     let type= req.query.type;
@@ -418,59 +361,6 @@ server.post('/vet/add', (req, res) => {
         });
     });
 });
-
-//admin updating a service based on id
-// server.put('/admin/services/update/:serviceid', (req, res) => {
-//     const { serviceid } = req.params;
-//     let name = req.body.name;
-//     let type = req.body.type;
-//     let provider = req.body.provider;
-//     let location = req.body.location;
-//     let cost = req.body.cost;
-//     let rating = req.body.rating;
-//     const query = `UPDATE services SET name = '${name}', type = '${type}', provider = '${provider}', location = '${location}', cost = '${cost}', rating = '${rating}' WHERE id = '${serviceid}'`;
-
-//     db.run(query, [name, type, provider, location, cost, rating, serviceid],(err)=> {
-//         if (err) {
-//             return res.status(500).send('Error updating service');
-//         }
-//         res.status(200).send('Service updated successfully');
-//     });
-// });
-
-// //admin deleting a service using its id
-// server.delete('/admin/services/delete/:serviceid', (req, res) => {
-//     const { serviceid } = req.params;
-//     const query = `DELETE FROM services WHERE id = ${serviceid}`;
-
-//     db.run(query, [serviceid], (err)=> {
-//         if (err) {
-//             return res.status(500).send('Error deleting service');
-//         }
-//         res.status(200).send('Service deleted successfully');
-//     });
-// });
-
-// //adding service
-// server.post('/admin/services/add', (req, res) => {
-//     let name = req.body.name;
-//     let type = req.body.type;
-//     let provider = req.body.provider;
-//     let location = req.body.location;
-//     let cost = req.body.cost;
-//     let rating = req.body.rating;
-//     const query = `INSERT INTO services (name, type, provider, location, cost, rating) VALUES ('${name}','${type}','${provider}','${location}','${cost}','${rating}')`;
-
-//     db.run(query, [name, type, provider, location, cost, rating],  (err) =>{
-//         if (err) {
-//             return res.status(500).send('Error creating service');
-//         }
-//         res.status(201).json({
-//             message: 'Service created successfully',
-//             serviceId: this.lastID
-//         });
-//     });
-// });
 
 //service feedback
 server.post('/vets/:vetid/feedback', (req, res) => {
@@ -598,6 +488,48 @@ server.post('/vets/:vetid/bookingappointments', (req, res) => {
                 });
             });
         });
+    });
+});
+
+//shops
+server.get('/shops', (req, res) => {
+    const query = 'SELECT * FROM shop';
+    db.all(query, (err, rows) => {
+        if (err) {
+            return res.status(500).send('Error fetching shops');
+        }
+        res.status(200).json(rows);
+    });
+});
+
+//search shops
+server.get('/shops/search', (req, res) => {
+    const { name, location, rating } = req.query;
+
+    if (!name && !location && !rating) {
+        return res.status(400).send("Choose at least one filter");
+    }
+
+    let searchquery = `SELECT * FROM shop WHERE 1=1`;
+
+    if (name) {
+        searchquery += ` AND name LIKE '%${name}%'`;
+    }
+    if (location) {
+        searchquery += ` AND location LIKE '%${location}%'`;
+    }
+    if (rating) {
+        searchquery += ` AND rating >= ${rating}`;
+    }
+
+    console.log("Search Results: ", searchquery);
+    db.all(searchquery, (err, rows) => {
+        if (err) {
+            console.error("Error fetching shops:", err.message);
+            return res.status(500).send("Failed to fetch shops.");
+        }
+
+        return res.status(200).json(rows);
     });
 });
 //starting server  
