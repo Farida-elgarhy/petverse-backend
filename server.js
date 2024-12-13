@@ -15,15 +15,6 @@ server.post('/user/register', (req, res) => {
     if (!name || !email || !password || !role) {
         return res.status(400).send("name, email,role, and password are required.");
     };
-    const checkemailquery=`Select * FROM USER WHERE email='${email}'`;
-    db.get(checkemailquery, (err,row)=>{
-        if (err){
-            return res.status(500).send("error checking email")
-        }
-        if (row){
-            return res.status(400).send("email already registered, please login")
-        }
-    })
     const insertquery = `INSERT INTO USER(name,email,password)Values('${name}','${email}','${password}')`;
     db.run(insertquery, (err) => {
         if (err) {
@@ -69,7 +60,9 @@ server.delete('/user/account/delete/:id', (req, res) => {
         if (err) {
             return res.status(500).send('Error deleting account');
         }
+        else{
         res.status(200).send('Account deleted successfully');
+        }
     });
 });
 
@@ -116,7 +109,9 @@ server.put('/user/account/edit/:id', (req, res) => {
         return res.status(200).send('Account updated successfully.');
     });
 });
-// // Get all users
+
+
+// Get all users
 server.get('/users', (req, res) => {
     const getAllUsersQuery = `SELECT * FROM user`;
 
@@ -247,23 +242,93 @@ server.get('/petprofiles', (req,res)=>{
     });
 });
 
-//SERVICES
-//services search
-server.get('/services/search', (req, res) => {
-    let type = req.query.type;
+// //SERVICES
+// //services search
+// server.get('/services/search', (req, res) => {
+//     let type = req.query.type;
+//     let name = req.query.name;
+//     let rating = req.query.rating;
+//     let contact = req.query.contact;
+//     let location = req.query.location;
+
+//     if (!type && !location && !rating && !name) {
+//         return res.status(400).send("choose at least one filter");
+//     }
+
+//     const searchquery = `SELECT * FROM services WHERE QUANTITY > 0`
+
+//     if (type) {
+//         searchquery += `AND TYPE= '${type}'`;
+//     };
+//     if (name) {
+//         searchquery += `AND NAME= '${name}'`;
+//     };
+//     if (location) {
+//         searchquery += `AND LOCATION = '${location}'`;
+//     }
+
+//     if (rating) {
+//         searchquery += `AND RATING = '${rating}'`;
+
+//     }
+
+//     console.log("Search Results: ", searchquery);
+//     db.all(searchquery, (err, rows) => {
+//         if (err) {
+//             console.error("Error fetching services:", err.message);
+//             return res.status(500).send("Failed to fetch services.");
+//         }
+
+//         return res.status(200).json({ services: rows });
+//     });
+// });
+
+
+//searching services by their id 
+// server.get('/services/search/:serviceid', (req, res) => {
+//     const servicesquery = `SELECT * FROM services WHERE id=${req.params.id}`
+//     db.get(servicesquery, (err, row) => {
+//         if (err) {
+//             console.log(err);
+//             return res.status(500).send('Error fetching service details');
+//         }
+//         if (!row) {
+//             return res.status(404).send(`Service with id = ${serviceid} not found`);
+//         }
+//         return res.status(200).json(row);
+//     });
+// });
+
+//getting all vets
+server.get('/vets', (req, res) => {
+    let type= req.query.type;
+    let location= req.query.location;
+    let rating= req.query.rating;
+
+    const query = 'SELECT * FROM vets';
+    db.all(query,(err, rows) => {
+        if (err) {
+            return res.status(500).send('Error fetching Vets');
+        }
+        res.status(200).json(rows);
+    });
+});
+
+//vets search
+server.get('/vets/search', (req, res) => {
     let name = req.query.name;
+    let specialisation = req.query.specialisation;
     let rating = req.query.rating;
-    let contact = req.query.contact;
     let location = req.query.location;
 
-    if (!type && !location && !rating && !name) {
+    if (!specialisation && !location && !rating && !name) {
         return res.status(400).send("choose at least one filter");
     }
 
-    const searchquery = `SELECT * FROM services WHERE QUANTITY > 0`
+    const searchquery = `SELECT * FROM vets WHERE QUANTITY > 0`
 
-    if (type) {
-        searchquery += `AND TYPE= '${type}'`;
+    if (specialisation) {
+        searchquery += `AND TYPE= '${specialisation}'`;
     };
     if (name) {
         searchquery += `AND NAME= '${name}'`;
@@ -280,112 +345,147 @@ server.get('/services/search', (req, res) => {
     console.log("Search Results: ", searchquery);
     db.all(searchquery, (err, rows) => {
         if (err) {
-            console.error("Error fetching services:", err.message);
-            return res.status(500).send("Failed to fetch services.");
+            console.error("Error fetching vets:", err.message);
+            return res.status(500).send("Failed to fetch vets.");
         }
 
         return res.status(200).json({ services: rows });
     });
 });
 
-
-//searching services by their id 
-server.get('/services/search/:serviceid', (req, res) => {
-    const servicesquery = `SELECT * FROM services WHERE id=${req.params.id}`
+server.get('/vets/search/:vetid', (req, res) => {
+    const servicesquery = `SELECT * FROM vets WHERE id=${req.params.id}`
     db.get(servicesquery, (err, row) => {
         if (err) {
             console.log(err);
-            return res.status(500).send('Error fetching service details');
+            return res.status(500).send('Error fetching vet details');
         }
         if (!row) {
-            return res.status(404).send(`Service with id = ${serviceid} not found`);
+            return res.status(404).send(`vet with id = ${vetid} not found`);
         }
         return res.status(200).json(row);
     });
 });
 
-//getting all services
-server.get('/admin/services', (req, res) => {
-    let type= req.query.type;
-    let location= req.query.location;
-    let rating= req.query.rating;
-
-    const query = 'SELECT * FROM services';
-    db.all(query,(err, rows) => {
-        if (err) {
-            return res.status(500).send('Error fetching services');
-        }
-        res.status(200).json(rows);
-    });
-});
-
-//admin updating a service based on id
-server.put('/admin/services/update/:serviceid', (req, res) => {
+server.put('/vet/update/:vetid', (req, res) => {
     const { serviceid } = req.params;
     let name = req.body.name;
-    let type = req.body.type;
-    let provider = req.body.provider;
+    let specialisation = req.body.specialisation;
     let location = req.body.location;
-    let cost = req.body.cost;
+    let email = req.body.email;
+    let phonenumber = req.body.phonenumber;
     let rating = req.body.rating;
-    const query = `UPDATE services SET name = '${name}', type = '${type}', provider = '${provider}', location = '${location}', cost = '${cost}', rating = '${rating}' WHERE id = '${serviceid}'`;
 
-    db.run(query, [name, type, provider, location, cost, rating, serviceid],(err)=> {
+    const query = `UPDATE vets SET name = '${name}', specialisation = '${specialisation}', location = '${location}', email = '${email}', rating = '${rating}', phonenumber = '${phonenumber}' WHERE id = '${vetid}'`;
+
+    db.run(query,(err)=> {
         if (err) {
-            return res.status(500).send('Error updating service');
+            return res.status(500).send('Error updating vet data');
         }
-        res.status(200).send('Service updated successfully');
+        res.status(200).send('Vet data updated successfully');
     });
 });
 
 //admin deleting a service using its id
-server.delete('/admin/services/delete/:serviceid', (req, res) => {
-    const { serviceid } = req.params;
-    const query = `DELETE FROM services WHERE id = ${serviceid}`;
+server.delete('/vet/delete/:vetid', (req, res) => {
+    const { vetid } = parseInt(req.params,10);
+    const query = `DELETE FROM vets WHERE id = ${vetid}`;
 
-    db.run(query, [serviceid], (err)=> {
+    db.run(query, (err)=> {
         if (err) {
-            return res.status(500).send('Error deleting service');
+            return res.status(500).send('Error deleting vet data');
         }
-        res.status(200).send('Service deleted successfully');
+        res.status(200).send('vet deleted successfully');
     });
 });
 
 //adding service
-server.post('/admin/services/add', (req, res) => {
+server.post('/vet/add', (req, res) => {
     let name = req.body.name;
-    let type = req.body.type;
-    let provider = req.body.provider;
+    let specialisation = req.body.specialisation;
     let location = req.body.location;
-    let cost = req.body.cost;
+    let email = req.body.email;
+    let phonenumber = req.body.phonenumber;
     let rating = req.body.rating;
-    const query = `INSERT INTO services (name, type, provider, location, cost, rating) VALUES ('${name}','${type}','${provider}','${location}','${cost}','${rating}')`;
+    const query = `INSERT INTO vets (name, specialisation, email, location, phonenumber, rating) VALUES ('${name}','${specialisation}','${email}','${location}','${phonenumber}','${rating}')`;
 
-    db.run(query, [name, type, provider, location, cost, rating],  (err) =>{
+    db.run(query, (err) =>{
         if (err) {
-            return res.status(500).send('Error creating service');
+            return res.status(500).send('Error adding new vet');
         }
         res.status(201).json({
-            message: 'Service created successfully',
-            serviceId: this.lastID
+            message: 'vet added successfully',
         });
     });
 });
 
+//admin updating a service based on id
+// server.put('/admin/services/update/:serviceid', (req, res) => {
+//     const { serviceid } = req.params;
+//     let name = req.body.name;
+//     let type = req.body.type;
+//     let provider = req.body.provider;
+//     let location = req.body.location;
+//     let cost = req.body.cost;
+//     let rating = req.body.rating;
+//     const query = `UPDATE services SET name = '${name}', type = '${type}', provider = '${provider}', location = '${location}', cost = '${cost}', rating = '${rating}' WHERE id = '${serviceid}'`;
+
+//     db.run(query, [name, type, provider, location, cost, rating, serviceid],(err)=> {
+//         if (err) {
+//             return res.status(500).send('Error updating service');
+//         }
+//         res.status(200).send('Service updated successfully');
+//     });
+// });
+
+// //admin deleting a service using its id
+// server.delete('/admin/services/delete/:serviceid', (req, res) => {
+//     const { serviceid } = req.params;
+//     const query = `DELETE FROM services WHERE id = ${serviceid}`;
+
+//     db.run(query, [serviceid], (err)=> {
+//         if (err) {
+//             return res.status(500).send('Error deleting service');
+//         }
+//         res.status(200).send('Service deleted successfully');
+//     });
+// });
+
+// //adding service
+// server.post('/admin/services/add', (req, res) => {
+//     let name = req.body.name;
+//     let type = req.body.type;
+//     let provider = req.body.provider;
+//     let location = req.body.location;
+//     let cost = req.body.cost;
+//     let rating = req.body.rating;
+//     const query = `INSERT INTO services (name, type, provider, location, cost, rating) VALUES ('${name}','${type}','${provider}','${location}','${cost}','${rating}')`;
+
+//     db.run(query, [name, type, provider, location, cost, rating],  (err) =>{
+//         if (err) {
+//             return res.status(500).send('Error creating service');
+//         }
+//         res.status(201).json({
+//             message: 'Service created successfully',
+//             serviceId: this.lastID
+//         });
+//     });
+// });
+
 //service feedback
-server.post('/services/:serviceId/feedback', (req, res) => {
-    let serviceid = req.params.serviceid;
+server.post('/vets/:vetid/feedback', (req, res) => {
+    let vetid = req.params.vetid;
     let userid = req.params.userid;
     let rating = req.body.rating;
     let comment = req.body.comment;
 
-    if (!userid || !rating || typeof rating !== 'number' || rating < 1 || rating > 5) {
+    if (!userid || !rating || typeof rating !== 'number' || rating < 1 || rating > 5 || !vetid) {
         return res.status(400).json({ message: "Invalid input. Ensure 'userId', 'rating' (1-5)" });
     }
 
     const feedbackQuery = `
-        INSERT INTO feedback (userid, serviceid, rating, comment)
-        VALUES ('${userid}', '${serviceid}', '${rating}', '${comment}')
+        INSERT INTO feedback (userid, vetid, rating, comment)
+        VALUES ('${userid}', '${vetid}', '${rating}', '${comment}')
     `;
 
     db.run(feedbackQuery, (err) =>{
@@ -397,6 +497,7 @@ server.post('/services/:serviceId/feedback', (req, res) => {
         return res.status(200).json({ message: "Feedback submitted successfully" });
     });
 });
+
 // user feedback for the website
 server.post('/user/feedback', (req, res) => {
     let rating = req.body.rating;
@@ -429,14 +530,13 @@ server.post('/user/feedback', (req, res) => {
 //admin getting all the feedbacks
 server.get(`/admin/feedback`, (req, res) => {
     const feedbackquery = `SELECT * FROM feedback`
-    db.all(feedbackquery, (err, rows) => {
+    db.all(feedbackquery, [], (err, rows) => {
         if (err) {
             console.error('Error fetching feedback:', err.message);
             return res.status(500).json({
                 message: "Error fetching feedback data. Please try again later."
             });
         }
-
         else
             return res.json(rows)
     });
@@ -444,16 +544,16 @@ server.get(`/admin/feedback`, (req, res) => {
 
 //APPOINTMENTS  
 //displaying all the appointments
-server.get('/appointments/available/:serviceid', (req, res) => {
-    const { serviceid } = req.params;
-    const availableslotsquery = `SELECT availableslots FROM services WHERE id>0`;
-    db.get(query, [serviceid], (err, row) => {
+server.get('/appointments/available/:vetid', (req, res) => {
+    const { vetid } = req.params;
+    const availableslotsquery = `SELECT availableslots FROM vets WHERE id>0`;
+    db.get(query,(err, row) => {
         if (err) {
             console.log(err);
             return res.status(500).send("failed to get available slots");
         }
         if (!row) {
-            return res.status(404).send("service not found")
+            return res.status(404).send("vet not found")
 
         }
         else {
