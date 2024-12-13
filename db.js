@@ -9,9 +9,8 @@ const createusertable = `
     name TEXT NOT NULL, 
     email TEXT UNIQUE NOT NULL, 
     password TEXT NOT NULL,
-    age INTEGER,
-    role TEXT NOT NULL
-    )`;
+    age INTEGER
+  )`;
 
 // creating pets table
 const createpettable = `
@@ -23,19 +22,8 @@ const createpettable = `
     healthnotes TEXT,
     breed TEXT NOT NULL,
     userid INTEGER,
-    FOREIGN KEY (userid) REFERENCES USER (id)
+    FOREIGN KEY (userid) REFERENCES user (id)
     )`;
-
-// // services table
-// const createservicestable = `
-//   CREATE TABLE IF NOT EXISTS services (
-//     id INTEGER PRIMARY KEY AUTOINCREMENT,
-//     name TEXT NOT NULL,
-//     type TEXT NOT NULL,
-//     rating REAL NOT NULL,
-//     contact TEXT NOT NULL,
-//     location TEXT NOT NULL,
-//     )`
 
 //vets table 
 const createvetstable= `
@@ -49,13 +37,36 @@ const createvetstable= `
     phonenumber INTEGER NOT NULL, 
     rating REAL NOT NULL, 
     userid INTEGER,
-    adminid INTEGER,
-    FOREIGN KEY (userid) REFERENCES USER (id),
-    FOREIGN KEY (adminid) REFERENCES USER (id),
-  )`;
+    FOREIGN KEY (userid) REFERENCES user (id)
+    )`;
+
+//appointments table
+const createappointmentstable = `
+  CREATE TABLE IF NOT EXISTS appointments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userid INTEGER,
+    vetid INTEGER,
+    appointmentdate TEXT NOT NULL,
+    appointmenttime TEXT NOT NULL,
+    FOREIGN KEY (userid) REFERENCES user (id),
+    FOREIGN KEY (vetid) REFERENCES vets (id)
+    )`;
+
+//feedback table
+const createfeedbacktable = `
+  CREATE TABLE IF NOT EXISTS feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rating INTEGER NOT NULL,
+    comment TEXT,
+    userid INTEGER,
+    vetid INTEGER,
+    FOREIGN KEY (userid) REFERENCES user (id),
+    FOREIGN KEY (vetid) REFERENCES vets (id)
+    )`;
 
 //shops table 
-const createshopstable= `CREATE TABLE IF NOT EXISTS shop (
+const createshopstable = `
+  CREATE TABLE IF NOT EXISTS shop (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     location TEXT NOT NULL,
@@ -63,56 +74,35 @@ const createshopstable= `CREATE TABLE IF NOT EXISTS shop (
     phonenumber INTEGER NOT NULL,
     rating REAL NOT NULL,
     userid INTEGER,
-    availableslots TEXT NOT NULL,
-    FOREIGN KEY (userid) REFERENCES USER (id)
-)`;
+    FOREIGN KEY (userid) REFERENCES user (id)
+    )`;
 
-//products table 
-const createproductstable= `CREATE TABLE IF NOT EXISTS products (
+//products table
+const createproductstable = `
+  CREATE TABLE IF NOT EXISTS products (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     description TEXT,
     price REAL NOT NULL,
     quantity INTEGER NOT NULL,
-    category TEXT,
-    shopid INTEGER NOT NULL, 
-    FOREIGN KEY (shopid) REFERENCES SHOP (ID)
-)`;
-
-// appointments table
-const createappointmentstable = `CREATE TABLE IF NOT EXISTS appointments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    userid TEXT NOT NULL,
-    vetid TEXT NOT NULL,
-    appointmenttime TEXT NOT NULL,
-    appointmentdate TEXT NOT NULL,
-    FOREIGN KEY (userid) REFERENCES user(id),
-    FOREIGN KEY (serviceid) REFERENCES vets(id)
+    category TEXT NOT NULL,
+    shopid INTEGER,
+    FOREIGN KEY (shopid) REFERENCES shop (id)
     )`;
 
-//feedback table
-const createfeedbacktable = `CREATE TABLE IF NOT EXISTS feedback (
+//purchases table
+const createpurchasestable = `
+  CREATE TABLE IF NOT EXISTS purchases (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    userid TEXT,  
-    serviceid INTEGER,  
-    feedbacktype TEXT NOT NULL,
-    rating INTEGER NOT NULL,
-    comment TEXT,
-    email TEXT, 
-    FOREIGN KEY (serviceid) REFERENCES services (id),
-    FOREIGN KEY (userid) REFERENCES user(id)
+    userid INTEGER,
+    productid INTEGER,
+    shopid INTEGER,
+    FOREIGN KEY (userid) REFERENCES user (id),
+    FOREIGN KEY (productid) REFERENCES products (id),
+    FOREIGN KEY (shopid) REFERENCES shop (id)
     )`;
 
-//complaints
-// const createcomplaintstable= `CREATE TABLE IF NOT EXISTS complaint(
-//     id INTEGER PRIMARY KEY AUTOINCREMENT,
-//     userid INTEGER,
-//     subject TEXT NOT NULL,
-//     description TEXT NOT NULL,
-//     FOREIGN KEY (userid) REFERENCES USER (id)
-// )`;
-
-//running database tables
+// Create tables
 db.serialize(() => { 
     db.exec(createusertable, (err) => {
         if (err) {
@@ -128,21 +118,21 @@ db.serialize(() => {
             console.log("Pets table created successfully!");
         }
     });
-
+    
     db.exec(createappointmentstable, (err) => {
-      if (err) {
+        if (err) {
         console.error("Error creating the table:", err.message);
-      } else {
-        console.log("Appointments table created successfully!");
-      }
+        } else {
+            console.log("Appointments table created successfully!");
+        }
     });
-
+    
     db.exec(createfeedbacktable, (err) => {
-      if (err) {
+        if (err) {
         console.error("Error creating the table:", err.message);
-      } else {
-        console.log("Feedback table created successfully!");
-      }
+        } else {
+            console.log("Feedback table created successfully!");
+        }
     });
     db.exec(createvetstable, (err) => {
       if (err) {
@@ -152,29 +142,28 @@ db.serialize(() => {
       }
     });
     db.exec(createshopstable, (err) => {
-      if (err) {
-          console.error("Error creating shops table:", err);
-      } else {
+        if (err) {
+            console.error("Error creating shops table:", err);
+        } else {
           console.log("shops table created successfully!");
-      }
+        }
     });
-    db.exec(createcomplaintstable, (err) => {
-      if (err) {
-          console.error("Error creating complaints table:", err);
-      } else {
-          console.log("complaints table created successfully!");
-      }
-    });
+    
     db.exec(createproductstable, (err) => {
-      if (err) {
-          console.error("Error creating products table:", err);
-      } else {
+        if (err) {
+            console.error("Error creating products table:", err);
+        } else {
           console.log("products table created successfully!");
-      }
+        }
     });
-
+    
+    db.exec(createpurchasestable, (err) => {
+        if (err) {
+            console.error("Error creating purchases table:", err);
+        } else {
+            console.log("Purchases table created successfully!");
+        }
+    });
 });
 
-
-
-module.exports = { db, createusertable, createpettable, createappointmentstable,createfeedbacktable, createcomplaintstable, createproductstable, createvetstable, createshopstable};
+module.exports = { db, createusertable, createpettable, createappointmentstable,createfeedbacktable, createproductstable, createvetstable, createshopstable};

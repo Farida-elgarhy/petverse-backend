@@ -17,18 +17,19 @@ server.post('/user/register', (req, res) => {
     let email = req.body.email;
     let password = req.body.password;
     let age = req.body.age;
-    let role = req.body.role;
 
-    if (!name || !email || !password || !role) {
-        return res.status(400).send("name, email, role, and password are required.");
+    if (!name || !email || !password) {
+        return res.status(400).send("name, email, and password are required.");
     }
-    const insertquery = `INSERT INTO USER(name, email, password, age, role) VALUES(?, ?, ?, ?, ?)`;
-    db.run(insertquery, [name, email, password, age, role], (err) => {
+
+    const insertquery = `INSERT INTO user (name, email, password, age) VALUES (?, ?, ?, ?)`;
+    db.run(insertquery, [name, email, password, age], (err) => {
         if (err) {
+            console.error("Registration error:", err);
             return res.status(500).send(`Error during registration: ${err.message}`);
         }
         else {
-        return res.status(200).send("Registration successful");
+            return res.status(200).send("Registration successful");
         }
     });
 });
@@ -157,12 +158,11 @@ server.post('/pets/createprofile', (req, res) => {
     db.run(insertquery, [name, age, vaccinationdates, healthnotes, breed],(err) => {
         if (err) {
             console.error("Error inserting pet profile:", err.message);
-            return res.status(500).json({ message: "Failed to create pet profile" });
+            return res.status(500).send( "Failed to create pet profile" );
         }
-
-        res.status(201).json({
-            message: "Pet profile created successfully",
-        });
+        else{
+        res.status(201).send("Pet profile created successfully")
+        }
     });
 });
 
@@ -275,24 +275,28 @@ server.get('/vets/search', (req, res) => {
         return res.status(400).send("Choose at least one filter");
     }
 
-    const searchquery = `SELECT * FROM vets WHERE QUANTITY > 0`
+    let searchquery = 'SELECT * FROM vets WHERE 1=1';
+    let params = [];
 
     if (specialisation) {
-        searchquery += ` AND specialisation = '%${specialisation}%'`;
+        searchquery += ` AND specialisation LIKE ?`;
+        params.push(`%${specialisation}%`);
     }
     if (name) {
-        searchquery += `AND NAME= '%${name}%'`;
-    };
+        searchquery += ` AND name LIKE ?`;
+        params.push(`%${name}%`);
+    }
     if (location) {
-        searchquery += `AND LOCATION = '%${location}%'`;
+        searchquery += ` AND location LIKE ?`;
+        params.push(`%${location}%`);
     }
 
     if (rating) {
-        searchquery += `AND RATING = '%${rating}%'`;
-
-    }
+        searchquery += ` AND rating >= ?`;
+        params.push(rating);    }
 
     console.log("Search Results: ", searchquery);
+    console.log("Query Parameters: ", params);
     db.all(searchquery, (err, rows) => {
         if (err) {
             console.error("Error fetching vets:", err.message);
@@ -324,10 +328,48 @@ server.put('/vet/update/:vetid', (req, res) => {
     let email = req.body.email;
     let phonenumber = req.body.phonenumber;
     let rating = req.body.rating;
+    let contact = req.body.contact;
 
-    const query = `UPDATE vets SET name = ?, specialisation = ?, location = ?, email = ?, rating = ?, phonenumber = ? WHERE id = ?`;
+    if (!name && !specialisation && !location && !email && !phonenumber && !rating && !contact) {
+        return res.status(400).send('At least one field required (name, specialisation, location, email, phonenumber, rating, contact)');
+    }
 
-    db.run(query, [name, specialisation, location, email, phonenumber, rating, vetid], (err) => {
+    const updates = [];
+    const values = [];
+
+    if (name) {
+        updates.push("name = ?");
+        values.push(name);
+    }
+    if (specialisation) {
+        updates.push("specialisation = ?");
+        values.push(specialisation);
+    }
+    if (location) {
+        updates.push("location = ?");
+        values.push(location);
+    }
+    if (email) {
+        updates.push("email = ?");
+        values.push(email);
+    }
+    if (phonenumber) {
+        updates.push("phonenumber = ?");
+        values.push(phonenumber);
+    }
+    if (rating) {
+        updates.push("rating = ?");
+        values.push(rating);
+    }
+    if (contact) {
+        updates.push("contact = ?");
+        values.push(contact);
+    }
+
+    const query = `UPDATE vets SET ${updates.join(', ')} WHERE id = ?`;
+    values.push(vetid);
+
+    db.run(query, values, (err) => {
         if (err) {
             return res.status(500).send('Error updating vet data');
         }
@@ -356,46 +398,74 @@ server.post('/vet/add', (req, res) => {
     let email = req.body.email;
     let phonenumber = req.body.phonenumber;
     let rating = req.body.rating;
-    const query = `INSERT INTO vets (name, specialisation, email, location, phonenumber, rating) VALUES (?,?,?,?,?,?)`;
+    let contact = req.body.contact;
 
-    db.run(query,[name,specialisation,email,location,phonenumber,rating], (err) =>{
+    if (!name || !specialisation || !location || !email || !phonenumber || !rating || !contact) {
+        return res.status(400).json({
+            error: 'All fields are required: name, specialisation, location, email, phonenumber, rating, and contact'
+        });
+    }
+
+    if (rating < 0 || rating > 5) {
+        return res.status(400).json({
+            error: 'Rating must be between 0 and 5'
+        });
+    }
+
+    const query = `INSERT INTO vets (name, specialisation, email, location, phonenumber, rating, contact) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?)`;
+
+    db.run(query, [name, specialisation, email, location, phonenumber, rating, contact], (err) => {
         if (err) {
             return res.status(500).send('Error adding new vet');
         }
-        res.status(201).json({
-            message: 'vet added successfully',
-        });
+        res.status(201).send('vet added successfully');
     });
 });
 
 //service feedback
 server.post('/vets/:vetid/feedback', (req, res) => {
-    let vetid = req.params.vetid;
-    let userid = req.params.userid;
-    let rating = req.body.rating;
-    let comment = req.body.comment;
+    const vetid = parseInt(req.params.vetid, 10);
+    const email = req.body.email;
+    const rating = req.body.rating;
+    const comment = req.body.comment;
 
-    if (!userid || !rating || typeof rating !== 'number' || rating < 1 || rating > 5 || !vetid) {
-        return res.status(400).json({ message: "Invalid input. Ensure 'userId', 'rating' (1-5)" });
+    if (!vetid ||!rating) {
+        return res.status(400).send('Rating and vet id is required');
     }
 
-    const feedbackQuery = `
-        INSERT INTO feedback (userid, vetid, rating, comment)
-        VALUES (?,?,?,?)
-    `;
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+        return res.status(400).send('Rating must be a whole number between 1 and 5')
+    }
 
-    db.run(feedbackQuery, [userid,vetid, rating, comment],(err) =>{
+    const checkVetQuery = `SELECT id FROM vets WHERE id = ?`;
+    db.get(checkVetQuery, [vetid], (err, vet) => {
         if (err) {
-            console.error("Error inserting feedback:", err.message);
-            return res.status(500).json({ message: "Failed to submit feedback" });
+            console.error("Error checking vet:", err);
+            return res.status(500).send("Database error" );
         }
 
-        return res.status(200).json({ message: "Feedback submitted successfully" });
+        if (!vet) {
+            return res.status(404).send("Vet not found");
+        }
+
+        const insertFeedbackQuery = `
+            INSERT INTO feedback (user_id, vet_id, rating, comment)
+            VALUES (?, ?, ?, ?)
+        `;
+        db.run(insertFeedbackQuery, [ vetid, rating, comment],(err)=> {
+            if (err) {
+                console.error("Error adding feedback:", err);
+                return res.status(500).send('Error adding feedback.');
+            }
+
+            return res.status(201).send(`Feedback added successfully with ID ${this.lastID}`);
+        });
     });
 });
 
 // user feedback for the website
-server.post('/user/feedback', (req, res) => {
+server.post('/feedback', (req, res) => {
     let rating = req.body.rating;
     let comment = req.body.comment;
     let email = req.body.email
@@ -411,14 +481,10 @@ server.post('/user/feedback', (req, res) => {
     db.run(feedbackQuery, [rating,comment,email], (err) => {
         if (err) {
             console.error('Error submitting feedback:', err.message);
-            return res.status(500).json({
-            message: "There was an error submitting your feedback. Please try again later."
-            });
+            return res.status(500).send("There was an error submitting your feedback. Please try again later.");
         }
 
-        return res.status(200).json({
-            message: "Thank you for your feedback!"
-        });
+        return res.status(200).send("Thank you for your feedback!");
     });
 });
 
@@ -429,9 +495,7 @@ server.get(`/admin/feedback`, (req, res) => {
     db.all(feedbackquery, [], (err, rows) => {
         if (err) {
             console.error('Error fetching feedback:', err.message);
-            return res.status(500).json({
-                message: "Error fetching feedback data. Please try again later."
-            });
+            return res.status(500).send( "Error fetching feedback data. Please try again later.");
         }
         else
             return res.json(rows)
@@ -516,21 +580,22 @@ server.get('/shops/search', (req, res) => {
     if (!name && !location && !rating) {
         return res.status(400).send("Choose at least one filter");
     }
-
     let searchquery = `SELECT * FROM shop WHERE 1=1`;
-
+    const queryParams = [];
     if (name) {
-        searchquery += ` AND name LIKE '%${name}%'`;
-    }
+        searchquery += ` AND name LIKE ?`;
+        queryParams.push(`%${name}%`);    }
     if (location) {
-        searchquery += ` AND location LIKE '%${location}%'`;
+        searchquery += ` AND location LIKE ?`;
+        queryParams.push(`%${location}%`);
     }
     if (rating) {
-        searchquery += ` AND rating >= ${rating}`;
+        searchquery += ` AND rating >= ?`;
+        queryParams.push(rating);
     }
 
     console.log("Search Results: ", searchquery);
-    db.all(searchquery, (err, rows) => {
+    db.all(searchquery, queryParams, (err, rows) => {
         if (err) {
             console.error("Error fetching shops:", err.message);
             return res.status(500).send("Failed to fetch shops.");
@@ -552,7 +617,7 @@ server.get('/shops/:shopid', (req, res) => {
         if (!row) {
             return res.status(404).send(`Shop not found`);
         }
-        res.status(200).json(row);
+        return res.status(200).json(row);
     });
 });
 
@@ -572,17 +637,46 @@ server.get('/shops/:shopid/products', (req, res) => {
     });
 });
 
-//updating shop
 server.put('/shop/update/:shopid', (req, res) => {
     const shopid = parseInt(req.params.shopid, 10);
-    let name= req.body.name;
-    let location= req.body.location;
-    let contact= req.body.contact;
-    let phonenumber= req.body.phonenumber;
-    let rating= req.body.rating;
-    const query = `UPDATE shop SET name = ?, location = ?, contact = ?, phonenumber = ?, rating = ? WHERE id = ?`;
+    let name = req.body.name;
+    let location = req.body.location;
+    let contact = req.body.contact;
+    let phonenumber = req.body.phonenumber;
+    let rating = req.body.rating;
 
-    db.run(query, [name,location,contact,phonenumber,rating,shopid], (err) => {
+    if (!name && !location && !contact && !phonenumber && !rating) {
+        return res.status(400).send('At least one field required (name, location, contact, phonenumber, rating)');
+    }
+
+    const updates = [];
+    const values = [];
+
+    if (name) {
+        updates.push("name = ?");
+        values.push(name);
+    }
+    if (location) {
+        updates.push("location = ?");
+        values.push(location);
+    }
+    if (contact) {
+        updates.push("contact = ?");
+        values.push(contact);
+    }
+    if (phonenumber) {
+        updates.push("phonenumber = ?");
+        values.push(phonenumber);
+    }
+    if (rating) {
+        updates.push("rating = ?");
+        values.push(rating);
+    }
+
+    const query = `UPDATE shop SET ${updates.join(', ')} WHERE id = ?`;
+    values.push(shopid);
+
+    db.run(query, values, (err) => {
         if (err) {
             return res.status(500).send('Error updating shop data');
         }
@@ -703,11 +797,11 @@ server.put('/shops/:shopid/products/:productid', (req, res) => {
             console.error("Error updating product:", err.message);
             return res.status(500).send("Failed to update product.");
         }
-
-        res.status(200).json({ message: "Product updated successfully." });
+        else{
+        res.status(200).send("Product updated successfully.");
+        }
     });
 });
-
 server.post('/shops/:shopid/products/:productid/buy', (req, res) => {
     const shopid = parseInt(req.params.shopid, 10);
     const productid = parseInt(req.params.productid, 10);
@@ -750,10 +844,9 @@ server.post('/shops/:shopid/products/:productid/buy', (req, res) => {
                     console.error("Error recording purchase:", err.message);
                     return res.status(500).send("Failed to record purchase.");
                 }
-
-                res.status(201).json({
-                    message: "Product purchased successfully."
-                });
+                else{
+                res.status(201).send("Product purchased successfully.")
+                }
             });
         });
     });
@@ -764,7 +857,7 @@ server.get('/user/dashboard/:userid', (req, res) => {
     const userId = parseInt(req.params.userid, 10);
 
     if (!userId) {
-        return res.status(400).json({ message: "User ID is required." });
+        return res.status(400).send("User ID is required." );
     }
 
     const petProfilesQuery = `SELECT * FROM pet WHERE userid = ?`;
@@ -773,13 +866,13 @@ server.get('/user/dashboard/:userid', (req, res) => {
     db.all(petProfilesQuery, [userId], (err, petProfiles) => {
         if (err) {
             console.error("Error fetching pet profiles:", err.message);
-            return res.status(500).json({ message: "Error fetching pet profiles." });
+            return res.status(500).send("Error fetching pet profiles." );
         }
 
         db.all(appointmentsQuery, [userId], (err, appointments) => {
             if (err) {
                 console.error("Error fetching appointments:", err.message);
-                return res.status(500).json({ message: "Error fetching appointments." });
+                return res.status(500).send("Error fetching appointments." );
             }
             return res.status(200).json({
                 message: "User Dashboard",
