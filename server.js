@@ -754,6 +754,37 @@ server.post('/shops/:shopid/products/:productid/buy', (req, res) => {
     });
 });
 
+//dashboard
+server.get('/user/dashboard/:userid', (req, res) => {
+    const userId = parseInt(req.params.userid, 10);
+
+    if (!userId) {
+        return res.status(400).json({ message: "User ID is required." });
+    }
+
+    const petProfilesQuery = `SELECT * FROM pet WHERE userid = ?`;
+    const appointmentsQuery = `SELECT * FROM appointments WHERE userid = ? ORDER BY appointmentdate ASC, appointmenttime ASC`;
+
+    db.all(petProfilesQuery, [userId], (err, petProfiles) => {
+        if (err) {
+            console.error("Error fetching pet profiles:", err.message);
+            return res.status(500).json({ message: "Error fetching pet profiles." });
+        }
+
+        db.all(appointmentsQuery, [userId], (err, appointments) => {
+            if (err) {
+                console.error("Error fetching appointments:", err.message);
+                return res.status(500).json({ message: "Error fetching appointments." });
+            }
+            return res.status(200).json({
+                message: "User Dashboard",
+                userId,
+                petProfiles,
+                appointments,
+            });
+        });
+    });
+});
 //starting server  
 server.listen(port, () => {
     console.log(`Server is listening at port ${port}`);
