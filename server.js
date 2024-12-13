@@ -12,6 +12,7 @@ server.use(cors({
 
 //USERR
 //registration
+
 server.post('/user/register', (req, res) => {
     let name = req.body.name;
     let email = req.body.email;
