@@ -16,17 +16,19 @@ server.post('/user/register', (req, res) => {
     let name = req.body.name;
     let email = req.body.email;
     let password = req.body.password;
-    let age= req.body.age;
+    let age = req.body.age;
+    let role = req.body.role;
+
     if (!name || !email || !password || !role) {
-        return res.status(400).send("name, email,role, and password are required.");
-    };
-    const insertquery = `INSERT INTO USER(name,email,password)Values(?, ?, ?)`;
-    db.run(insertquery, [name, email, password],(err) => {
+        return res.status(400).send("name, email, role, and password are required.");
+    }
+    const insertquery = `INSERT INTO USER(name, email, password, age, role) VALUES(?, ?, ?, ?, ?)`;
+    db.run(insertquery, [name, email, password, age, role], (err) => {
         if (err) {
             return res.status(500).send(`Error during registration: ${err.message}`);
         }
         else {
-            return res.status(200).send("Registration successful");
+        return res.status(200).send("Registration successful");
         }
     });
 });
@@ -270,14 +272,14 @@ server.get('/vets/search', (req, res) => {
     let location = req.query.location;
 
     if (!specialisation && !location && !rating && !name) {
-        return res.status(400).send("choose at least one filter");
+        return res.status(400).send("Choose at least one filter");
     }
 
     const searchquery = `SELECT * FROM vets WHERE QUANTITY > 0`
 
     if (specialisation) {
-        searchquery += `AND TYPE= '%${specialisation}%'`;
-    };
+        searchquery += ` AND specialisation = '%${specialisation}%'`;
+    }
     if (name) {
         searchquery += `AND NAME= '%${name}%'`;
     };
@@ -296,14 +298,13 @@ server.get('/vets/search', (req, res) => {
             console.error("Error fetching vets:", err.message);
             return res.status(500).send("Failed to fetch vets.");
         }
-
-        return res.status(200).json({ services: rows });
+        return res.status(200).json({ vets: rows });
     });
 });
 
 server.get('/vets/search/:vetid', (req, res) => {
     const servicesquery = `SELECT * FROM vets WHERE id=?`
-    db.get(servicesquery,[vetid], (err, row) => {
+    db.get(servicesquery,[req.params.vetid], (err, row) => {
         if (err) {
             console.log(err);
             return res.status(500).send('Error fetching vet details');
@@ -316,7 +317,7 @@ server.get('/vets/search/:vetid', (req, res) => {
 });
 
 server.put('/vet/update/:vetid', (req, res) => {
-    const { serviceid } = req.params;
+    const vetid = parseInt(req.params.vetid, 10);
     let name = req.body.name;
     let specialisation = req.body.specialisation;
     let location = req.body.location;
@@ -326,7 +327,7 @@ server.put('/vet/update/:vetid', (req, res) => {
 
     const query = `UPDATE vets SET name = ?, specialisation = ?, location = ?, email = ?, rating = ?, phonenumber = ? WHERE id = ?`;
 
-    db.run(query,[name, specialisation, location, email, phonenumber, rating],(err)=> {
+    db.run(query, [name, specialisation, location, email, phonenumber, rating, vetid], (err) => {
         if (err) {
             return res.status(500).send('Error updating vet data');
         }
@@ -336,14 +337,14 @@ server.put('/vet/update/:vetid', (req, res) => {
 
 //admin deleting a service using its id
 server.delete('/vet/delete/:vetid', (req, res) => {
-    const { vetid } = parseInt(req.params,10);
+    const vetid = parseInt(req.params.vetid, 10);
     const query = `DELETE FROM vets WHERE id = ?`;
 
-    db.run(query, [vetid],(err)=> {
+    db.run(query, [vetid], (err) => {
         if (err) {
             return res.status(500).send('Error deleting vet data');
         }
-        res.status(200).send('vet deleted successfully');
+        res.status(200).send('Vet deleted successfully');
     });
 });
 
@@ -355,7 +356,7 @@ server.post('/vet/add', (req, res) => {
     let email = req.body.email;
     let phonenumber = req.body.phonenumber;
     let rating = req.body.rating;
-    const query = `INSERT INTO vets (name, specialisation, email, location, phonenumber, rating) VALUES (?,?,?,?,?,?))`;
+    const query = `INSERT INTO vets (name, specialisation, email, location, phonenumber, rating) VALUES (?,?,?,?,?,?)`;
 
     db.run(query,[name,specialisation,email,location,phonenumber,rating], (err) =>{
         if (err) {
@@ -715,8 +716,9 @@ server.post('/shops/:shopid/products/:productid/buy', (req, res) => {
     if (!shopid || !productid || !userid) {
         return res.status(400).send("Shop ID, Product ID, and User ID are required.");
     }
+
     const fetch_product_query = `SELECT * FROM products WHERE id = ? AND shopid = ?`;
-    db.get(fetch_product_query, [shopid, productid],(err, product) => {
+    db.get(fetch_product_query, [productid, shopid], (err, product) => {
         if (err) {
             console.error("Error fetching product details:", err.message);
             return res.status(500).send("Failed to fetch product details.");
@@ -732,24 +734,25 @@ server.post('/shops/:shopid/products/:productid/buy', (req, res) => {
 
         const updated_quantity = product.quantity - 1;
         const update_product_query = `UPDATE products SET quantity = ? WHERE id = ? AND shopid = ?`;
-        db.run(update_product_query, [quantity,shopid,productid],(err) => {
+        db.run(update_product_query, [updated_quantity, productid, shopid], (err) => {
             if (err) {
                 console.error("Error updating product quantity:", err.message);
                 return res.status(500).send("Failed to update product quantity.");
             }
+
             const insert_purchase_query = `
                 INSERT INTO purchases (userid, productid, shopid)
                 VALUES (?, ?, ?)
             `;
 
-            db.run(insert_purchase_query, [userid,productid, shopid],function (err) {
+            db.run(insert_purchase_query, [userid, productid, shopid], function(err) {
                 if (err) {
                     console.error("Error recording purchase:", err.message);
                     return res.status(500).send("Failed to record purchase.");
                 }
 
                 res.status(201).json({
-                    message: "Product purchased successfully.",
+                    message: "Product purchased successfully."
                 });
             });
         });
