@@ -57,6 +57,7 @@ server.post('/user/register', (req, res) => {
                 return res.status(200).send(`registration successfull`)
         })
     })
+
 });
 
 // Logout route
@@ -206,7 +207,10 @@ server.post('/user/pets/add', verifyToken, (req, res) => {
     db.run(insertquery, [name, age, vaccinationdates, healthnotes, breed, userid], (err) => {
         if (err) {
             console.error("Error inserting pet profile:", err.message);
-            return res.status(500).json({ message: "Failed to create pet profile" });
+            return res.status(500).send( "Failed to create pet profile" );
+        }
+        else{
+        res.status(201).send("Pet profile created successfully")
         }
         res.status(201).json({
             message: "Pet profile created successfully",
@@ -346,6 +350,7 @@ server.get('/vets/search', verifyToken, (req, res) => {
     console.log("Search Results: ", searchquery);
     console.log("Query Parameters: ", params);
     db.all(searchquery, params, (err, rows) => {
+
         if (err) {
             console.error("Error fetching vets:", err.message);
             return res.status(500).send("Failed to fetch vets.");
@@ -486,12 +491,8 @@ server.post('/vets/:vetid/feedback', verifyToken, (req, res) => {
         return res.status(400).send('Rating must be a whole number between 1 and 5')
     }
 
-    const feedbackQuery = `
-        INSERT INTO feedback (userid, vetid, rating, comment)
-        VALUES (?,?,?,?)
-    `;
-
-    db.run(feedbackQuery, [userid,vetid, rating, comment],(err) =>{
+    const checkVetQuery = `SELECT id FROM vets WHERE id = ?`;
+    db.get(checkVetQuery, [vetid], (err, vet) => {
         if (err) {
             console.error("Error checking vet:", err);
             return res.status(500).send("Database error" );
@@ -513,11 +514,13 @@ server.post('/vets/:vetid/feedback', verifyToken, (req, res) => {
 
                 return res.status(201).send(`Feedback added successfully`);
             });
+
     });
 });
 
 // user feedback for the website
 server.post('/user/feedback', verifyToken, (req, res) => {
+
     let rating = req.body.rating;
     let comment = req.body.comment;
     let email = req.body.email
@@ -690,6 +693,7 @@ server.get('/shops/:shopid/products', verifyToken, (req, res) => {
 });
 
 server.put('/shop/update/:shopid', verifyToken, (req, res) => {
+
     const shopid = parseInt(req.params.shopid, 10);
     let name = req.body.name;
     let location = req.body.location;
@@ -854,7 +858,9 @@ server.put('/shops/:shopid/products/:productid', verifyToken, (req, res) => {
         }
     });
 });
+
 server.post('/shops/:shopid/products/:productid/buy', verifyToken, (req, res) => {
+
     const shopid = parseInt(req.params.shopid, 10);
     const productid = parseInt(req.params.productid, 10);
     const userid = req.body.userid;
