@@ -20,8 +20,8 @@ server.post('/user/register', (req, res) => {
     if (!name || !email || !password || !role) {
         return res.status(400).send("name, email,role, and password are required.");
     };
-    const insertquery = `INSERT INTO USER(name,email,password)Values('${name}','${email}','${password}')`;
-    db.run(insertquery, (err) => {
+    const insertquery = `INSERT INTO USER(name,email,password)Values(?, ?, ?)`;
+    db.run(insertquery, [name, email, password],(err) => {
         if (err) {
             return res.status(500).send(`Error during registration: ${err.message}`);
         }
@@ -40,9 +40,9 @@ server.post('/user/login', (req, res) => {
         return res.status(400).send("Email and password are required.");
     }
 
-    const loginquery = `SELECT * FROM USER WHERE email = '${email}' AND password = '${password}'`;
+    const loginquery = `SELECT * FROM USER WHERE email = ? AND password = ?`;
 
-    db.get(loginquery, (err, row) => {
+    db.get(loginquery, [email, password],(err, row) => {
         if (err){
             console.error("Database error:", err);
             return res.status(500).send("An error occurred.");
@@ -60,8 +60,8 @@ server.post('/user/login', (req, res) => {
 server.delete('/user/account/delete/:id', (req, res) => {
     let userid= parseInt(req.params.id,10); 
     
-    const query = `DELETE FROM user WHERE id = ${userid}`;
-    db.run(query, (err) => {
+    const query = `DELETE FROM user WHERE id = ?`;
+    db.run(query, [userid], (err) => {
         if (err) {
             return res.status(500).send('Error deleting account');
         }
@@ -150,9 +150,9 @@ server.post('/pets/createprofile', (req, res) => {
         return res.status(400).json({ message: "Invalid age" });
     }
 
-    const insertquery = `INSERT INTO PET (name, age, vaccinationdates, healthnotes, breed)VALUES ('${name}','${age}','${vaccinationdates}','${healthnotes}', '${breed}')`;
+    const insertquery = `INSERT INTO PET (name, age, vaccinationdates, healthnotes, breed)VALUES (?, ?, ?, ?, ?)`;
 
-    db.run(insertquery, (err) => {
+    db.run(insertquery, [name, age, vaccinationdates, healthnotes, breed],(err) => {
         if (err) {
             console.error("Error inserting pet profile:", err.message);
             return res.status(500).json({ message: "Failed to create pet profile" });
@@ -168,8 +168,8 @@ server.post('/pets/createprofile', (req, res) => {
 server.delete('/user/pets/delete/:id', (req, res) => {
     let petid= parseInt(req.params.id, 10);
 
-    const query = `DELETE FROM pet WHERE id = ${petid}`;
-    db.run(query, (err) =>{
+    const query = `DELETE FROM pet WHERE id = ?`;
+    db.run(query, [petid], (err) =>{
         if (err) {
             return res.status(500).send('Error deleting pet account');
         }
@@ -276,17 +276,17 @@ server.get('/vets/search', (req, res) => {
     const searchquery = `SELECT * FROM vets WHERE QUANTITY > 0`
 
     if (specialisation) {
-        searchquery += `AND TYPE= '${specialisation}'`;
+        searchquery += `AND TYPE= '%${specialisation}%'`;
     };
     if (name) {
-        searchquery += `AND NAME= '${name}'`;
+        searchquery += `AND NAME= '%${name}%'`;
     };
     if (location) {
-        searchquery += `AND LOCATION = '${location}'`;
+        searchquery += `AND LOCATION = '%${location}%'`;
     }
 
     if (rating) {
-        searchquery += `AND RATING = '${rating}'`;
+        searchquery += `AND RATING = '%${rating}%'`;
 
     }
 
@@ -302,14 +302,14 @@ server.get('/vets/search', (req, res) => {
 });
 
 server.get('/vets/search/:vetid', (req, res) => {
-    const servicesquery = `SELECT * FROM vets WHERE id=${req.params.id}`
-    db.get(servicesquery, (err, row) => {
+    const servicesquery = `SELECT * FROM vets WHERE id=?`
+    db.get(servicesquery,[vetid], (err, row) => {
         if (err) {
             console.log(err);
             return res.status(500).send('Error fetching vet details');
         }
         if (!row) {
-            return res.status(404).send(`vet with id = ${vetid} not found`);
+            return res.status(404).send(`vet not found`);
         }
         return res.status(200).json(row);
     });
@@ -324,9 +324,9 @@ server.put('/vet/update/:vetid', (req, res) => {
     let phonenumber = req.body.phonenumber;
     let rating = req.body.rating;
 
-    const query = `UPDATE vets SET name = '${name}', specialisation = '${specialisation}', location = '${location}', email = '${email}', rating = '${rating}', phonenumber = '${phonenumber}' WHERE id = '${vetid}'`;
+    const query = `UPDATE vets SET name = ?, specialisation = ?, location = ?, email = ?, rating = ?, phonenumber = ? WHERE id = ?`;
 
-    db.run(query,(err)=> {
+    db.run(query,[name, specialisation, location, email, phonenumber, rating],(err)=> {
         if (err) {
             return res.status(500).send('Error updating vet data');
         }
@@ -337,9 +337,9 @@ server.put('/vet/update/:vetid', (req, res) => {
 //admin deleting a service using its id
 server.delete('/vet/delete/:vetid', (req, res) => {
     const { vetid } = parseInt(req.params,10);
-    const query = `DELETE FROM vets WHERE id = ${vetid}`;
+    const query = `DELETE FROM vets WHERE id = ?`;
 
-    db.run(query, (err)=> {
+    db.run(query, [vetid],(err)=> {
         if (err) {
             return res.status(500).send('Error deleting vet data');
         }
@@ -355,9 +355,9 @@ server.post('/vet/add', (req, res) => {
     let email = req.body.email;
     let phonenumber = req.body.phonenumber;
     let rating = req.body.rating;
-    const query = `INSERT INTO vets (name, specialisation, email, location, phonenumber, rating) VALUES ('${name}','${specialisation}','${email}','${location}','${phonenumber}','${rating}')`;
+    const query = `INSERT INTO vets (name, specialisation, email, location, phonenumber, rating) VALUES (?,?,?,?,?,?))`;
 
-    db.run(query, (err) =>{
+    db.run(query,[name,specialisation,email,location,phonenumber,rating], (err) =>{
         if (err) {
             return res.status(500).send('Error adding new vet');
         }
@@ -380,10 +380,10 @@ server.post('/vets/:vetid/feedback', (req, res) => {
 
     const feedbackQuery = `
         INSERT INTO feedback (userid, vetid, rating, comment)
-        VALUES ('${userid}', '${vetid}', '${rating}', '${comment}')
+        VALUES (?,?,?,?)
     `;
 
-    db.run(feedbackQuery, (err) =>{
+    db.run(feedbackQuery, [userid,vetid, rating, comment],(err) =>{
         if (err) {
             console.error("Error inserting feedback:", err.message);
             return res.status(500).json({ message: "Failed to submit feedback" });
@@ -405,9 +405,9 @@ server.post('/user/feedback', (req, res) => {
         });
     }
 
-    const feedbackQuery = `INSERT INTO feedback (rating, comment, email) VALUES ('${email}', '${rating}', '${comment}')`;
+    const feedbackQuery = `INSERT INTO feedback (rating, comment, email) VALUES (?,?,?)`;
 
-    db.run(feedbackQuery, (err) => {
+    db.run(feedbackQuery, [rating,comment,email], (err) => {
         if (err) {
             console.error('Error submitting feedback:', err.message);
             return res.status(500).json({
@@ -448,8 +448,8 @@ server.post('/vets/:vetid/bookingappointments', (req, res) => {
         return res.status(400).send("User ID and selected slot are required.");
     }
 
-    const fetch_slots_query = `SELECT availableslots FROM vets WHERE id = ${vetid}`;
-    db.get(fetch_slots_query, (err, row) => {
+    const fetch_slots_query = `SELECT availableslots FROM vets WHERE id = ?`;
+    db.get(fetch_slots_query, [vetid],(err, row) => {
         if (err) {
             console.error("Error fetching available slots:", err.message);
             return res.status(500).send("Failed to fetch available slots.");
@@ -468,8 +468,8 @@ server.post('/vets/:vetid/bookingappointments', (req, res) => {
 
         const updated_slots = updated_slots_array.join(',');
 
-        const update_slots_query = `UPDATE vets SET availableslots = '${updated_slots}' WHERE id = ${vetid}`;
-        db.run(update_slots_query, (err) => {
+        const update_slots_query = `UPDATE vets SET availableslots = ? WHERE id = ?`;
+        db.run(update_slots_query, [updated_slots, vetid], (err) => {
             if (err) {
                 console.error("Error updating slots:", err.message);
                 return res.status(500).json({ message: "Failed to update available slots." });
@@ -478,10 +478,10 @@ server.post('/vets/:vetid/bookingappointments', (req, res) => {
             const [appointment_date, appointment_time] = bookingslot.split(' '); 
             const insert_appointment_query = `
                 INSERT INTO appointments (userid, vetid, appointmentdate, appointmenttime)
-                VALUES ('${userid}', '${vetid}', '${appointment_date}', '${appointment_time}')
+                VALUES (?,?,?,?)
             `;
 
-            db.run(insert_appointment_query, function (err) {
+            db.run(insert_appointment_query,[userid,vetid,appointment_date,appointment_time], function (err) {
                 if (err) {
                     console.error("Error booking appointment:", err.message);
                     return res.status(500).json({ message: "Failed to confirm booking." });
@@ -542,14 +542,14 @@ server.get('/shops/search', (req, res) => {
 //searching with shop id 
 server.get('/shops/:shopid', (req, res) => {
     const shopid = parseInt(req.params.shopid, 10);
-    const query = `SELECT * FROM shop WHERE id = ${shopid}`;
-    db.get(query, (err, row) => {
+    const query = `SELECT * FROM shop WHERE id = ?`;
+    db.get(query, [shopid],(err, row) => {
         if (err) {
             console.error("Error fetching shop details:", err.message);
             return res.status(500).send('Error fetching shop details');
         }
         if (!row) {
-            return res.status(404).send(`Shop with ID = ${shopid} not found`);
+            return res.status(404).send(`Shop not found`);
         }
         res.status(200).json(row);
     });
@@ -558,8 +558,8 @@ server.get('/shops/:shopid', (req, res) => {
 //getting products using shop id
 server.get('/shops/:shopid/products', (req, res) => {
     const shopid = parseInt(req.params.shopid, 10);
-    const query = `SELECT * FROM products WHERE shopid = ${shopid}`;
-    db.all(query, (err, rows) => {
+    const query = `SELECT * FROM products WHERE shopid = ?`;
+    db.all(query, [shopid],(err, rows) => {
         if (err) {
             console.error("Error fetching products for shop:", err.message);
             return res.status(500).send('Error fetching products');
@@ -579,9 +579,9 @@ server.put('/shop/update/:shopid', (req, res) => {
     let contact= req.body.contact;
     let phonenumber= req.body.phonenumber;
     let rating= req.body.rating;
-    const query = `UPDATE shop SET name = '${name}', location = '${location}', contact = '${contact}', phonenumber = '${phonenumber}', rating = '${rating}' WHERE id = ${shopid}`;
+    const query = `UPDATE shop SET name = ?, location = ?, contact = ?, phonenumber = ?, rating = ? WHERE id = ?`;
 
-    db.run(query, (err) => {
+    db.run(query, [name,location,contact,phonenumber,rating,shopid], (err) => {
         if (err) {
             return res.status(500).send('Error updating shop data');
         }
@@ -592,9 +592,9 @@ server.put('/shop/update/:shopid', (req, res) => {
 //deleting shop
 server.delete('/shop/delete/:shopid', (req, res) => {
     const shopid = parseInt(req.params.shopid, 10);
-    const query = `DELETE FROM shop WHERE id = ${shopid}`;
+    const query = `DELETE FROM shop WHERE id = ?`;
 
-    db.run(query, (err) => {
+    db.run(query, [shopid],(err) => {
         if (err) {
             return res.status(500).send('Error deleting shop');
         }
@@ -615,10 +615,10 @@ server.post('/shop/add', (req, res) => {
 
     const query = `
         INSERT INTO shop (name, location, contact, phonenumber, rating)
-        VALUES ('${name}', '${location}', '${contact}', '${phonenumber}', '${rating}')
+        VALUES (?,?,?,?,?)
     `;
 
-    db.run(query, (err) => {
+    db.run(query, [name,location,contact,phonenumber,rating],(err) => {
         if (err) {
             return res.status(500).send('Error adding new shop');
         }
@@ -640,10 +640,10 @@ server.post('/shops/:shopid/products/add', (req, res) => {
 
     const query = `
         INSERT INTO products (name, description, price, quantity, category, shopid)
-        VALUES ('${name}', '${description}', '${price}', '${quantity}', '${category}', '${shopid}')
+        VALUES (?,?,?,?,?,?)
     `;
 
-    db.run(query, (err) => {
+    db.run(query, [name,description,price,quantity,category,shopid],(err) => {
         if (err) {
             return res.status(500).send('Error adding product');
         }
@@ -659,9 +659,9 @@ server.delete('/shops/:shopid/products/:productid', (req, res) => {
         return res.status(400).send("Shop ID and Product ID are required.");
     }
 
-    const query = `DELETE FROM products WHERE id = ${productid} AND shopid = ${shopid}`;
+    const query = `DELETE FROM products WHERE id = ? AND shopid = ?`;
 
-    db.run(query, (err) => {
+    db.run(query,[productid,shopid], (err) => {
         if (err) {
             console.error("Error deleting product:", err.message);
             return res.status(500).send("Failed to delete product.");
@@ -715,8 +715,8 @@ server.post('/shops/:shopid/products/:productid/buy', (req, res) => {
     if (!shopid || !productid || !userid) {
         return res.status(400).send("Shop ID, Product ID, and User ID are required.");
     }
-    const fetch_product_query = `SELECT * FROM products WHERE id = ${productid} AND shopid = ${shopid}`;
-    db.get(fetch_product_query, (err, product) => {
+    const fetch_product_query = `SELECT * FROM products WHERE id = ? AND shopid = ?`;
+    db.get(fetch_product_query, [shopid, productid],(err, product) => {
         if (err) {
             console.error("Error fetching product details:", err.message);
             return res.status(500).send("Failed to fetch product details.");
@@ -731,26 +731,23 @@ server.post('/shops/:shopid/products/:productid/buy', (req, res) => {
         }
 
         const updated_quantity = product.quantity - 1;
-        const update_product_query = `UPDATE products SET quantity = ${updated_quantity} WHERE id = ${productid} AND shopid = ${shopid}`;
-        db.run(update_product_query, (err) => {
+        const update_product_query = `UPDATE products SET quantity = ? WHERE id = ? AND shopid = ?`;
+        db.run(update_product_query, [quantity,shopid,productid],(err) => {
             if (err) {
                 console.error("Error updating product quantity:", err.message);
                 return res.status(500).send("Failed to update product quantity.");
             }
-
-            // Step 3: Record the purchase in a purchase history table (optional but recommended)
             const insert_purchase_query = `
-                INSERT INTO purchases (userid, productid, shopid, purchase_date)
-                VALUES ('${userid}', '${productid}', '${shopid}', datetime('now'))
+                INSERT INTO purchases (userid, productid, shopid)
+                VALUES (?, ?, ?)
             `;
 
-            db.run(insert_purchase_query, function (err) {
+            db.run(insert_purchase_query, [userid,productid, shopid],function (err) {
                 if (err) {
                     console.error("Error recording purchase:", err.message);
                     return res.status(500).send("Failed to record purchase.");
                 }
 
-                // Step 4: Return success response with purchase ID
                 res.status(201).json({
                     message: "Product purchased successfully.",
                 });
