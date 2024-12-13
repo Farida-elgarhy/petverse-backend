@@ -504,8 +504,9 @@ server.get('/shops', (req, res) => {
 
 //search shops
 server.get('/shops/search', (req, res) => {
-    const { name, location, rating } = req.query;
-
+    let name= req.query.name;
+    let location= req.query.location;
+    let rating= req.query.rating;
     if (!name && !location && !rating) {
         return res.status(400).send("Choose at least one filter");
     }
@@ -532,6 +533,227 @@ server.get('/shops/search', (req, res) => {
         return res.status(200).json(rows);
     });
 });
+
+//searching with shop id 
+server.get('/shops/:shopid', (req, res) => {
+    const shopid = parseInt(req.params.shopid, 10);
+    const query = `SELECT * FROM shop WHERE id = ${shopid}`;
+    db.get(query, (err, row) => {
+        if (err) {
+            console.error("Error fetching shop details:", err.message);
+            return res.status(500).send('Error fetching shop details');
+        }
+        if (!row) {
+            return res.status(404).send(`Shop with ID = ${shopid} not found`);
+        }
+        res.status(200).json(row);
+    });
+});
+
+//getting products using shop id
+server.get('/shops/:shopid/products', (req, res) => {
+    const shopid = parseInt(req.params.shopid, 10);
+    const query = `SELECT * FROM products WHERE shopid = ${shopid}`;
+    db.all(query, (err, rows) => {
+        if (err) {
+            console.error("Error fetching products for shop:", err.message);
+            return res.status(500).send('Error fetching products');
+        }
+        if (rows.length === 0) {
+            return res.status(404).send(`No products found for shop ID = ${shopid}`);
+        }
+        res.status(200).json(rows);
+    });
+});
+
+//updating shop
+server.put('/shop/update/:shopid', (req, res) => {
+    const shopid = parseInt(req.params.shopid, 10);
+    let name= req.body.name;
+    let location= req.body.location;
+    let contact= req.body.contact;
+    let phonenumber= req.body.phonenumber;
+    let rating= req.body.rating;
+    const query = `UPDATE shop SET name = '${name}', location = '${location}', contact = '${contact}', phonenumber = '${phonenumber}', rating = '${rating}' WHERE id = ${shopid}`;
+
+    db.run(query, (err) => {
+        if (err) {
+            return res.status(500).send('Error updating shop data');
+        }
+        res.status(200).send('Shop data updated successfully');
+    });
+});
+
+//deleting shop
+server.delete('/shop/delete/:shopid', (req, res) => {
+    const shopid = parseInt(req.params.shopid, 10);
+    const query = `DELETE FROM shop WHERE id = ${shopid}`;
+
+    db.run(query, (err) => {
+        if (err) {
+            return res.status(500).send('Error deleting shop');
+        }
+        res.status(200).send('Shop deleted successfully');
+    });
+});
+
+server.post('/shop/add', (req, res) => {
+    let name= req.body.name;
+    let location= req.body.location;
+    let contact= req.body.contact;
+    let phonenumber= req.body.phonenumber;
+    let rating= req.body.rating;
+
+    if (!name || !location || !contact || !phonenumber || !rating) {
+        return res.status(400).send("Missing required fields");
+    }
+
+    const query = `
+        INSERT INTO shop (name, location, contact, phonenumber, rating)
+        VALUES ('${name}', '${location}', '${contact}', '${phonenumber}', '${rating}')
+    `;
+
+    db.run(query, (err) => {
+        if (err) {
+            return res.status(500).send('Error adding new shop');
+        }
+        res.status(201).json({ message: 'Shop added successfully' });
+    });
+});
+
+server.post('/shops/:shopid/products/add', (req, res) => {
+    const shopid = parseInt(req.params.shopid, 10);
+    let name= req.body.name;
+    let description= req.body.description;
+    let price= req.body.price;
+    let quantity= req.body.quantity;
+    let category= req.body.category;
+
+    if (!name || !price || !quantity || !category) {
+        return res.status(400).send("Missing required fields");
+    }
+
+    const query = `
+        INSERT INTO products (name, description, price, quantity, category, shopid)
+        VALUES ('${name}', '${description}', '${price}', '${quantity}', '${category}', '${shopid}')
+    `;
+
+    db.run(query, (err) => {
+        if (err) {
+            return res.status(500).send('Error adding product');
+        }
+        res.status(201).json({ message: 'Product added successfully' });
+    });
+});
+
+server.delete('/shops/:shopid/products/:productid', (req, res) => {
+    const shopid = parseInt(req.params.shopid, 10);
+    const productid = parseInt(req.params.productid, 10);
+
+    if (!shopid || !productid) {
+        return res.status(400).send("Shop ID and Product ID are required.");
+    }
+
+    const query = `DELETE FROM products WHERE id = ${productid} AND shopid = ${shopid}`;
+
+    db.run(query, (err) => {
+        if (err) {
+            console.error("Error deleting product:", err.message);
+            return res.status(500).send("Failed to delete product.");
+        }
+
+        res.status(200).json({ message: "Product deleted successfully." });
+    });
+});
+
+server.put('/shops/:shopid/products/:productid', (req, res) => {
+    const shopid = parseInt(req.params.shopid, 10);
+    const productid = parseInt(req.params.productid, 10);
+    let name= req.body.name;
+    let description= req.body.description;
+    let price= req.body.price;
+    let quantity= req.body.quantity;
+    let category= req.body.category;
+
+    if (!shopid || !productid) {
+        return res.status(400).send("Shop ID and Product ID are required.");
+    }
+
+    if (!name && !description && !price && !quantity && !category) {
+        return res.status(400).send("At least one field to update must be provided.");
+    }
+
+    const updates = [];
+    if (name) updates.push(`name = '${name}'`);
+    if (description) updates.push(`description = '${description}'`);
+    if (price) updates.push(`price = ${price}`);
+    if (quantity) updates.push(`quantity = ${quantity}`);
+    if (category) updates.push(`category = '${category}'`);
+
+    const query = `UPDATE products SET ${updates.join(', ')} WHERE id = ${productid} AND shopid = ${shopid}`;
+
+    db.run(query, (err) => {
+        if (err) {
+            console.error("Error updating product:", err.message);
+            return res.status(500).send("Failed to update product.");
+        }
+
+        res.status(200).json({ message: "Product updated successfully." });
+    });
+});
+
+server.post('/shops/:shopid/products/:productid/buy', (req, res) => {
+    const shopid = parseInt(req.params.shopid, 10);
+    const productid = parseInt(req.params.productid, 10);
+    const userid = req.body.userid; 
+
+    if (!shopid || !productid || !userid) {
+        return res.status(400).send("Shop ID, Product ID, and User ID are required.");
+    }
+    const fetch_product_query = `SELECT * FROM products WHERE id = ${productid} AND shopid = ${shopid}`;
+    db.get(fetch_product_query, (err, product) => {
+        if (err) {
+            console.error("Error fetching product details:", err.message);
+            return res.status(500).send("Failed to fetch product details.");
+        }
+
+        if (!product) {
+            return res.status(404).send("Product not found in the specified shop.");
+        }
+
+        if (product.quantity <= 0) {
+            return res.status(400).send("Product is out of stock.");
+        }
+
+        const updated_quantity = product.quantity - 1;
+        const update_product_query = `UPDATE products SET quantity = ${updated_quantity} WHERE id = ${productid} AND shopid = ${shopid}`;
+        db.run(update_product_query, (err) => {
+            if (err) {
+                console.error("Error updating product quantity:", err.message);
+                return res.status(500).send("Failed to update product quantity.");
+            }
+
+            // Step 3: Record the purchase in a purchase history table (optional but recommended)
+            const insert_purchase_query = `
+                INSERT INTO purchases (userid, productid, shopid, purchase_date)
+                VALUES ('${userid}', '${productid}', '${shopid}', datetime('now'))
+            `;
+
+            db.run(insert_purchase_query, function (err) {
+                if (err) {
+                    console.error("Error recording purchase:", err.message);
+                    return res.status(500).send("Failed to record purchase.");
+                }
+
+                // Step 4: Return success response with purchase ID
+                res.status(201).json({
+                    message: "Product purchased successfully.",
+                });
+            });
+        });
+    });
+});
+
 //starting server  
 server.listen(port, () => {
     console.log(`Server is listening at port ${port}`);
