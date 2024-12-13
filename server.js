@@ -544,28 +544,62 @@ server.get(`/admin/feedback`, (req, res) => {
 
 //APPOINTMENTS  
 //displaying all the appointments
-server.get('/appointments/available/:vetid', (req, res) => {
-    const { vetid } = req.params;
-    const availableslotsquery = `SELECT availableslots FROM vets WHERE id>0`;
-    db.get(query,(err, row) => {
-        if (err) {
-            console.log(err);
-            return res.status(500).send("failed to get available slots");
-        }
-        if (!row) {
-            return res.status(404).send("vet not found")
+server.post('/vets/:vetid/bookingappointments', (req, res) => {
+    let vetid = parseInt(req.params.vetid, 10);
+    let userid= req.body.userid
+    let bookingslot  = req.body.bookingslot;
 
+    if (!userid || !bookingslot) {
+        return res.status(400).send("User ID and selected slot are required.");
+    }
+
+    const fetch_slots_query = `SELECT availableslots FROM vets WHERE id = ${vetid}`;
+    db.get(fetch_slots_query, (err, row) => {
+        if (err) {
+            console.error("Error fetching available slots:", err.message);
+            return res.status(500).send("Failed to fetch available slots.");
         }
-        else {
-            let availableslots = [];
-            if (row.availableslots) {
-                availableslots = row.availableslots.split(',');
+
+        if (!row || !row.availableslots) {
+            return res.status(404).send("No available booking slots for this vet.");
+        }
+
+        const available_slots = row.availableslots.split(',');
+        const updated_slots_array = available_slots.filter(slot => slot !== bookingslot);
+
+        if (updated_slots_array.length === available_slots.length) {
+            return res.status(400).json({ message: "Selected slot is not available." });
+        }
+
+        const updated_slots = updated_slots_array.join(',');
+
+        const update_slots_query = `UPDATE vets SET availableslots = '${updated_slots}' WHERE id = ${vetid}`;
+        db.run(update_slots_query, (err) => {
+            if (err) {
+                console.error("Error updating slots:", err.message);
+                return res.status(500).json({ message: "Failed to update available slots." });
             }
-            return res.status(200).json({ availableslots })
-        }
+
+            const [appointment_date, appointment_time] = bookingslot.split(' '); 
+            const insert_appointment_query = `
+                INSERT INTO appointments (userid, vetid, appointmentdate, appointmenttime)
+                VALUES ('${userid}', '${vetid}', '${appointment_date}', '${appointment_time}')
+            `;
+
+            db.run(insert_appointment_query, function (err) {
+                if (err) {
+                    console.error("Error booking appointment:", err.message);
+                    return res.status(500).json({ message: "Failed to confirm booking." });
+                }
+                return res.status(201).json({
+                    message: "Booking confirmed!",
+                    appointment_date,
+                    appointment_time
+                });
+            });
+        });
     });
 });
-
 //starting server  
 server.listen(port, () => {
     console.log(`Server is listening at port ${port}`);
