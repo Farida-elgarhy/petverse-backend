@@ -1,66 +1,112 @@
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+const cookieParser = require('cookie-parser');
 const db_access = require('./db.js');
 const db = db_access.db;
 const server = express();
 const port = 8888;
-server.use(express.json());
+const secret_key = 'PetVerseSecretKey2024';
+
 server.use(cors({
     origin:"http://localhost:3000",
     credentials:true
 }))
+server.use(express.json());
+server.use(cookieParser());
+
+
+
+const generateToken = (id, isAdmin) => {
+    return jwt.sign({ id, isAdmin }, secret_key, { expiresIn: '2h' });
+};
+
+const verifyToken = (req, res, next) => {
+    const token = req.cookies.authToken;
+    if (!token) {
+        return res.status(401).send('Unauthorized');
+    }
+    
+    jwt.verify(token, secret_key, (err, details) => {
+        if (err) {
+            return res.status(403).send('Invalid or expired token');
+        }
+        req.userDetails = details;
+        next();
+    });
+};
+
 
 //USERR
 //registration
 server.post('/user/register', (req, res) => {
-    let name = req.body.name;
-    let email = req.body.email;
-    let password = req.body.password;
+    const name = req.body.name
+    const email = req.body.email
+    const password = req.body.password
     let age = req.body.age;
-
-    if (!name || !email || !password) {
-        return res.status(400).send("name, email, and password are required.");
-    }
-
-    const insertquery = `INSERT INTO user (name, email, password, age) VALUES (?, ?, ?, ?)`;
-    db.run(insertquery, [name, email, password, age], (err) => {
+    bcrypt.hash(password, 10, (err, hashedPassword) => {
         if (err) {
-            console.error("Registration error:", err);
-            return res.status(500).send(`Error during registration: ${err.message}`);
+            return res.status(500).send('error hashing password')
         }
-        else {
-            return res.status(200).send("Registration successful");
-        }
-    });
+        db.run(`INSERT INTO USER (name,email,password,isadmin) VALUES (?,?,?,?)`, [name, email, hashedPassword, 0], (err) => {
+            if (err) {
+                return res.status(401).send(err)
+            }
+            else
+                return res.status(200).send(`registration successfull`)
+        })
+    })
+
 });
+
+// Logout route
+server.post('/user/logout', (req, res) => {
+    res.clearCookie('authToken');
+    res.status(200).send('Logged out successfully');
+});
+
+
 
 //login
 server.post('/user/login', (req, res) => {
-    let email = req.body.email;
-    let password = req.body.password;
-
-    if (!email || !password) {
-        return res.status(400).send("Email and password are required.");
-    }
-
-    const loginquery = `SELECT * FROM USER WHERE email = ? AND password = ?`;
-
-    db.get(loginquery, [email, password],(err, row) => {
-        if (err){
+    const email = req.body.email
+    const password = req.body.password
+    db.get(`SELECT * FROM USER WHERE EMAIL=?`, [email], (err, row) => {
+        if (err) {
             console.error("Database error:", err);
             return res.status(500).send("An error occurred.");
         }
       
         if (!row) {
             return res.status(401).send("Invalid credentials");
-        } else {
-            return res.status(200).send("Login successful");
         }
+        
+        bcrypt.compare(password, row.PASSWORD, (err, isMatch) => {
+            if (err) {
+                return res.status(500).send('Error comparing password');
+            }
+            if (!isMatch) {
+                return res.status(401).send('Invalid credentials');
+            }
+            
+            let userID = row.ID
+            let isAdmin = row.ISADMIN
+            const token = generateToken(userID, isAdmin)
+
+            res.cookie('authToken', token, {
+                httpOnly: true,
+                sameSite: 'none',
+                secure: true,
+                expiresIn: '1h'
+            })
+            return res.status(200).json({ id: userID, admin: isAdmin })
+        });
     });
 });
 
 //user deleting account
-server.delete('/user/account/delete/:id', (req, res) => {
+server.delete('/user/account/delete/:id', verifyToken, (req, res) => {
     let userid= parseInt(req.params.id,10); 
     
     const query = `DELETE FROM user WHERE id = ?`;
@@ -75,7 +121,7 @@ server.delete('/user/account/delete/:id', (req, res) => {
 });
 
 //user editing account
-server.put('/user/account/edit/:id', (req, res) => {
+server.put('/user/account/edit/:id', verifyToken, (req, res) => {
     let name= req.body.name;
     let email= req.body.email;
     let password = req.body.password;
@@ -97,8 +143,13 @@ server.put('/user/account/edit/:id', (req, res) => {
         values.push(email);
     }
     if (password) {
-        updates.push("password = ?");
-        values.push(password);
+        bcrypt.hash(password, 10, (err, hashedPassword) => {
+            if (err) {
+                return res.status(500).send('Error hashing password');
+            }
+            updates.push("password = ?");
+            values.push(hashedPassword);
+        });
     }
 
     const query = `UPDATE user SET ${updates.join(', ')} WHERE id = ?`;
@@ -118,9 +169,8 @@ server.put('/user/account/edit/:id', (req, res) => {
     });
 });
 
-
 // Get all users
-server.get('/users', (req, res) => {
+server.get('/users', verifyToken, (req, res) => {
     const getAllUsersQuery = `SELECT * FROM user`;
 
     db.all(getAllUsersQuery, [], (err, rows) => {
@@ -139,23 +189,22 @@ server.get('/users', (req, res) => {
 
 //PETT
 //creating pet profile
-server.post('/pets/createprofile', (req, res) => {
+server.post('/user/pets/add', verifyToken, (req, res) => { 
     let name = req.body.name;
     let age = req.body.age;
     let vaccinationdates = req.body.vaccinationdates;
     let healthnotes = req.body.healthnotes;
     let breed =req.body.breed;
+    let userid= req.body.userid;
 
-    if (!name || !age || !breed) {
-        return res.status(400).json({ message: "Missing required fields: name, age and breed" });
-    }
-    if (typeof age !== 'number' || age < 0) {
-        return res.status(400).json({ message: "Invalid age" });
+    if (!name || !age || !breed || !userid) {
+        return res.status(400).send("Name, age, breed and user ID are required");
     }
 
-    const insertquery = `INSERT INTO PET (name, age, vaccinationdates, healthnotes, breed)VALUES (?, ?, ?, ?, ?)`;
-
-    db.run(insertquery, [name, age, vaccinationdates, healthnotes, breed],(err) => {
+    const insertquery = `INSERT INTO pet (name, age, vaccinationdates, healthnotes, breed, userid) 
+                        VALUES (?, ?, ?, ?, ?, ?)`;
+    
+    db.run(insertquery, [name, age, vaccinationdates, healthnotes, breed, userid], (err) => {
         if (err) {
             console.error("Error inserting pet profile:", err.message);
             return res.status(500).send( "Failed to create pet profile" );
@@ -163,11 +212,14 @@ server.post('/pets/createprofile', (req, res) => {
         else{
         res.status(201).send("Pet profile created successfully")
         }
+        res.status(201).json({
+            message: "Pet profile created successfully",
+        });
     });
 });
 
 //deleting pet profile
-server.delete('/user/pets/delete/:id', (req, res) => {
+server.delete('/user/pets/delete/:id', verifyToken, (req, res) => {
     let petid= parseInt(req.params.id, 10);
 
     const query = `DELETE FROM pet WHERE id = ?`;
@@ -180,7 +232,7 @@ server.delete('/user/pets/delete/:id', (req, res) => {
 });
 
 //user editing pets profile
-server.put('/user/pets/edit/:id', (req, res) => {
+server.put('/user/pets/edit/:id', verifyToken, (req, res) => {
     const petid  =parseInt(req.params.id,10);
     let name = req.body.name;
     let age = req.body.age;
@@ -232,7 +284,7 @@ server.put('/user/pets/edit/:id', (req, res) => {
 });
 
 //get all pet profiles
-server.get('/petprofiles', (req,res)=>{
+server.get('/petprofiles', verifyToken, (req,res)=>{
     const getallpetsquery= `SELECT * FROM pet`;
 
     db.all(getallpetsquery, [], (err,rows)=>{
@@ -250,7 +302,7 @@ server.get('/petprofiles', (req,res)=>{
 });
 
 //getting all vets
-server.get('/vets', (req, res) => {
+server.get('/vets', verifyToken, (req, res) => {
     let type= req.query.type;
     let location= req.query.location;
     let rating= req.query.rating;
@@ -265,7 +317,7 @@ server.get('/vets', (req, res) => {
 });
 
 //vets search
-server.get('/vets/search', (req, res) => {
+server.get('/vets/search', verifyToken, (req, res) => {
     let name = req.query.name;
     let specialisation = req.query.specialisation;
     let rating = req.query.rating;
@@ -297,16 +349,17 @@ server.get('/vets/search', (req, res) => {
 
     console.log("Search Results: ", searchquery);
     console.log("Query Parameters: ", params);
-    db.all(searchquery, (err, rows) => {
+    db.all(searchquery, params, (err, rows) => {
+
         if (err) {
             console.error("Error fetching vets:", err.message);
             return res.status(500).send("Failed to fetch vets.");
         }
-        return res.status(200).json({ vets: rows });
+        return res.status(200).json(rows);
     });
 });
 
-server.get('/vets/search/:vetid', (req, res) => {
+server.get('/vets/search/:vetid', verifyToken, (req, res) => {
     const servicesquery = `SELECT * FROM vets WHERE id=?`
     db.get(servicesquery,[req.params.vetid], (err, row) => {
         if (err) {
@@ -320,7 +373,7 @@ server.get('/vets/search/:vetid', (req, res) => {
     });
 });
 
-server.put('/vet/update/:vetid', (req, res) => {
+server.put('/vet/update/:vetid', verifyToken, (req, res) => {
     const vetid = parseInt(req.params.vetid, 10);
     let name = req.body.name;
     let specialisation = req.body.specialisation;
@@ -378,7 +431,7 @@ server.put('/vet/update/:vetid', (req, res) => {
 });
 
 //admin deleting a service using its id
-server.delete('/vet/delete/:vetid', (req, res) => {
+server.delete('/vet/delete/:vetid', verifyToken, (req, res) => {
     const vetid = parseInt(req.params.vetid, 10);
     const query = `DELETE FROM vets WHERE id = ?`;
 
@@ -391,7 +444,7 @@ server.delete('/vet/delete/:vetid', (req, res) => {
 });
 
 //adding service
-server.post('/vet/add', (req, res) => {
+server.post('/vet/add', verifyToken, (req, res) => {
     let name = req.body.name;
     let specialisation = req.body.specialisation;
     let location = req.body.location;
@@ -424,7 +477,7 @@ server.post('/vet/add', (req, res) => {
 });
 
 //service feedback
-server.post('/vets/:vetid/feedback', (req, res) => {
+server.post('/vets/:vetid/feedback', verifyToken, (req, res) => {
     const vetid = parseInt(req.params.vetid, 10);
     const email = req.body.email;
     const rating = req.body.rating;
@@ -449,23 +502,25 @@ server.post('/vets/:vetid/feedback', (req, res) => {
             return res.status(404).send("Vet not found");
         }
 
-        const insertFeedbackQuery = `
+            const insertFeedbackQuery = `
             INSERT INTO feedback (user_id, vet_id, rating, comment)
-            VALUES (?, ?, ?, ?)
-        `;
+                VALUES (?, ?, ?, ?)
+            `;
         db.run(insertFeedbackQuery, [ vetid, rating, comment],(err)=> {
-            if (err) {
-                console.error("Error adding feedback:", err);
-                return res.status(500).send('Error adding feedback.');
-            }
+                if (err) {
+                    console.error("Error adding feedback:", err);
+                    return res.status(500).send('Error adding feedback.');
+                }
 
-            return res.status(201).send(`Feedback added successfully with ID ${this.lastID}`);
-        });
+                return res.status(201).send(`Feedback added successfully`);
+            });
+
     });
 });
 
 // user feedback for the website
-server.post('/feedback', (req, res) => {
+server.post('/user/feedback', verifyToken, (req, res) => {
+
     let rating = req.body.rating;
     let comment = req.body.comment;
     let email = req.body.email
@@ -490,7 +545,7 @@ server.post('/feedback', (req, res) => {
 
 
 //admin getting all the feedbacks
-server.get(`/admin/feedback`, (req, res) => {
+server.get(`/admin/feedback`, verifyToken, (req, res) => {
     const feedbackquery = `SELECT * FROM feedback`
     db.all(feedbackquery, [], (err, rows) => {
         if (err) {
@@ -504,7 +559,7 @@ server.get(`/admin/feedback`, (req, res) => {
 
 //APPOINTMENTS  
 //displaying all the appointments
-server.post('/vets/:vetid/bookingappointments', (req, res) => {
+server.post('/vets/:vetid/bookingappointments', verifyToken, (req, res) => {
     let vetid = parseInt(req.params.vetid, 10);
     let userid= req.body.userid
     let bookingslot  = req.body.bookingslot;
@@ -562,7 +617,7 @@ server.post('/vets/:vetid/bookingappointments', (req, res) => {
 });
 
 //shops
-server.get('/shops', (req, res) => {
+server.get('/shops', verifyToken, (req, res) => {
     const query = 'SELECT * FROM shop';
     db.all(query, (err, rows) => {
         if (err) {
@@ -573,7 +628,7 @@ server.get('/shops', (req, res) => {
 });
 
 //search shops
-server.get('/shops/search', (req, res) => {
+server.get('/shops/search', verifyToken, (req, res) => {
     let name= req.query.name;
     let location= req.query.location;
     let rating= req.query.rating;
@@ -606,7 +661,7 @@ server.get('/shops/search', (req, res) => {
 });
 
 //searching with shop id 
-server.get('/shops/:shopid', (req, res) => {
+server.get('/shops/:shopid', verifyToken, (req, res) => {
     const shopid = parseInt(req.params.shopid, 10);
     const query = `SELECT * FROM shop WHERE id = ?`;
     db.get(query, [shopid],(err, row) => {
@@ -622,7 +677,7 @@ server.get('/shops/:shopid', (req, res) => {
 });
 
 //getting products using shop id
-server.get('/shops/:shopid/products', (req, res) => {
+server.get('/shops/:shopid/products', verifyToken, (req, res) => {
     const shopid = parseInt(req.params.shopid, 10);
     const query = `SELECT * FROM products WHERE shopid = ?`;
     db.all(query, [shopid],(err, rows) => {
@@ -637,7 +692,8 @@ server.get('/shops/:shopid/products', (req, res) => {
     });
 });
 
-server.put('/shop/update/:shopid', (req, res) => {
+server.put('/shop/update/:shopid', verifyToken, (req, res) => {
+
     const shopid = parseInt(req.params.shopid, 10);
     let name = req.body.name;
     let location = req.body.location;
@@ -685,7 +741,7 @@ server.put('/shop/update/:shopid', (req, res) => {
 });
 
 //deleting shop
-server.delete('/shop/delete/:shopid', (req, res) => {
+server.delete('/shop/delete/:shopid', verifyToken, (req, res) => {
     const shopid = parseInt(req.params.shopid, 10);
     const query = `DELETE FROM shop WHERE id = ?`;
 
@@ -697,7 +753,7 @@ server.delete('/shop/delete/:shopid', (req, res) => {
     });
 });
 
-server.post('/shop/add', (req, res) => {
+server.post('/shop/add', verifyToken, (req, res) => {
     let name= req.body.name;
     let location= req.body.location;
     let contact= req.body.contact;
@@ -721,7 +777,7 @@ server.post('/shop/add', (req, res) => {
     });
 });
 
-server.post('/shops/:shopid/products/add', (req, res) => {
+server.post('/shops/:shopid/products/add', verifyToken, (req, res) => {
     const shopid = parseInt(req.params.shopid, 10);
     let name= req.body.name;
     let description= req.body.description;
@@ -746,27 +802,27 @@ server.post('/shops/:shopid/products/add', (req, res) => {
     });
 });
 
-server.delete('/shops/:shopid/products/:productid', (req, res) => {
+server.delete('/shops/:shopid/products/:productid', verifyToken, (req, res) => {
     const shopid = parseInt(req.params.shopid, 10);
     const productid = parseInt(req.params.productid, 10);
 
     if (!shopid || !productid) {
         return res.status(400).send("Shop ID and Product ID are required.");
-    }
+        }
 
     const query = `DELETE FROM products WHERE id = ? AND shopid = ?`;
 
     db.run(query,[productid,shopid], (err) => {
-        if (err) {
+            if (err) {
             console.error("Error deleting product:", err.message);
             return res.status(500).send("Failed to delete product.");
-        }
+            }
 
         res.status(200).json({ message: "Product deleted successfully." });
+        });
     });
-});
 
-server.put('/shops/:shopid/products/:productid', (req, res) => {
+server.put('/shops/:shopid/products/:productid', verifyToken, (req, res) => {
     const shopid = parseInt(req.params.shopid, 10);
     const productid = parseInt(req.params.productid, 10);
     let name= req.body.name;
@@ -802,10 +858,12 @@ server.put('/shops/:shopid/products/:productid', (req, res) => {
         }
     });
 });
-server.post('/shops/:shopid/products/:productid/buy', (req, res) => {
+
+server.post('/shops/:shopid/products/:productid/buy', verifyToken, (req, res) => {
+
     const shopid = parseInt(req.params.shopid, 10);
     const productid = parseInt(req.params.productid, 10);
-    const userid = req.body.userid; 
+    const userid = req.body.userid;
 
     if (!shopid || !productid || !userid) {
         return res.status(400).send("Shop ID, Product ID, and User ID are required.");
@@ -853,7 +911,7 @@ server.post('/shops/:shopid/products/:productid/buy', (req, res) => {
 });
 
 //dashboard
-server.get('/user/dashboard/:userid', (req, res) => {
+server.get('/user/dashboard/:userid', verifyToken, (req, res) => {
     const userId = parseInt(req.params.userid, 10);
 
     if (!userId) {
@@ -878,7 +936,7 @@ server.get('/user/dashboard/:userid', (req, res) => {
                 message: "User Dashboard",
                 userId,
                 petProfiles,
-                appointments,
+                appointments
             });
         });
     });
