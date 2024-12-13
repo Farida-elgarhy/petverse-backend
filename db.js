@@ -78,6 +78,7 @@ const createproductstable= `CREATE TABLE IF NOT EXISTS products (
     shopid INTEGER NOT NULL, 
     FOREIGN KEY (shopid) REFERENCES SHOP (ID)
 )`;
+
 // appointments table
 const createappointmentstable = `CREATE TABLE IF NOT EXISTS appointments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -103,13 +104,13 @@ const createfeedbacktable = `CREATE TABLE IF NOT EXISTS feedback (
     )`;
 
 //complaints
-const createcomplaintstable= `CREATE TABLE IF NOT EXISTS complaint(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    userid INTEGER,
-    subject TEXT NOT NULL,
-    description TEXT NOT NULL,
-    FOREIGN KEY (userid) REFERENCES USER (id)
-)`;
+// const createcomplaintstable= `CREATE TABLE IF NOT EXISTS complaint(
+//     id INTEGER PRIMARY KEY AUTOINCREMENT,
+//     userid INTEGER,
+//     subject TEXT NOT NULL,
+//     description TEXT NOT NULL,
+//     FOREIGN KEY (userid) REFERENCES USER (id)
+// )`;
 
 //running database tables
 db.serialize(() => { 
