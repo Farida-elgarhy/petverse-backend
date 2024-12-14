@@ -52,7 +52,8 @@ const createappointmentstable = `
     userid INTEGER,
     vetid INTEGER,
     appointmentdate TEXT NOT NULL,
-    appointmenttime TEXT NOT NULL,
+    bookingslot TEXT NOT NULL,
+    status TEXT DEFAULT 'scheduled',
     FOREIGN KEY (userid) REFERENCES user (id),
     FOREIGN KEY (vetid) REFERENCES vets (id)
   )`;
@@ -104,6 +105,9 @@ const createpurchasestable = `
     userid INTEGER,
     productid INTEGER,
     shopid INTEGER,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    totalprice REAL NOT NULL,
+    purchasedate TEXT NOT NULL,
     FOREIGN KEY (userid) REFERENCES user (id),
     FOREIGN KEY (productid) REFERENCES products (id),
     FOREIGN KEY (shopid) REFERENCES shop (id)
@@ -112,76 +116,69 @@ const createpurchasestable = `
 
 // Create tables
 db.serialize(() => { 
-    db.exec(createusertable, (err) => {
-        if (err) {
-            console.error("Error creating user table:", err);
-        } else {
-            console.log("User table created successfully!");
-        }
-    });
-    db.exec(createpettable, (err) => {
-        if (err) {
-            console.error("Error creating pets table:", err.message);
-        } else {
-            console.log("Pets table created successfully!");
-        }
-    });
-    
-    db.exec(createappointmentstable, (err) => {
-        if (err) {
-            console.error("Error creating the table:", err.message);
-        }
-    
-    db.exec(createfeedbacktable, (err) => {
-        if (err) {
-            console.error("Error creating the table:", err.message);
-        } else {
-            console.log("Feedback table created successfully!");
-        }
-    });
-    db.exec(createvetstable, (err) => {
-        if (err) {
-            console.error("Error creating vets table:", err);
-        } else {
-            console.log("vets table created successfully!");
-        }
-    });
-    db.exec(createshopstable, (err) => {
-        if (err) {
-            console.error("Error creating shops table:", err);
-        } else {
-            console.log("shops table created successfully!");
-        }
-    });
-    
-    db.exec(createproductstable, (err) => {
-        if (err) {
-            console.error("Error creating products table:", err);
-        } else {
-            console.log("products table created successfully!");
+  db.exec(createusertable, (err) => {
+      if (err) {
+          console.error("Error creating user table:", err);
+      } else {
+          console.log("User table created successfully!");
+      }
+  });
 
-        }
-    });
-    
-    db.exec(createpurchasestable, (err) => {
-        if (err) {
-            console.error("Error creating purchases table:", err);
-        } else {
-            console.log("Purchases table created successfully!");
-        }
-    });
+  db.exec(createpettable, (err) => {
+      if (err) {
+          console.error("Error creating pets table:", err.message);
+      } else {
+          console.log("Pets table created successfully!");
+      }
+  });
+
+  db.exec(createappointmentstable, (err) => {
+      if (err) {
+          console.error("Error creating the appointments table:", err.message);
+      } else {
+          console.log("Appointments table created successfully!");
+      }
+  });
+
+  db.exec(createfeedbacktable, (err) => {
+      if (err) {
+          console.error("Error creating the feedback table:", err.message);
+      } else {
+          console.log("Feedback table created successfully!");
+      }
+  });
+
+  db.exec(createvetstable, (err) => {
+      if (err) {
+          console.error("Error creating vets table:", err);
+      } else {
+          console.log("Vets table created successfully!");
+      }
+  });
+
+  db.exec(createshopstable, (err) => {
+      if (err) {
+          console.error("Error creating shops table:", err);
+      } else {
+          console.log("Shops table created successfully!");
+      }
+  });
+
+  db.exec(createproductstable, (err) => {
+      if (err) {
+          console.error("Error creating products table:", err);
+      } else {
+          console.log("Products table created successfully!");
+      }
+  });
+
+  db.exec(createpurchasestable, (err) => {
+      if (err) {
+          console.error("Error creating purchases table:", err);
+      } else {
+          console.log("Purchases table created successfully!");
+      }
+  });
 });
 
-
-module.exports = { 
-    db, 
-    createusertable, 
-    createpettable, 
-    createappointmentstable,
-    createfeedbacktable, 
-    createproductstable, 
-    createvetstable, 
-    createshopstable,
-    createpurchasestable
-};
-
+module.exports = { db, createusertable, createpettable, createappointmentstable,createfeedbacktable, createproductstable,createvetstable,createshopstable,createpurchasestable};
