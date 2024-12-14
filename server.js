@@ -943,5 +943,5 @@ server.get('/user/dashboard/:userid', verifyToken, (req, res) => {
 });
 //starting server  
 server.listen(port, () => {
-    console.log(`Server is listening at port ${port}`);
+    console.log(`Server is running on port ${port}`);
 });
