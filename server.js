@@ -595,35 +595,11 @@ server.get('/vets', verifyToken, (req, res) => {
     });
 });
 
-//shops search
+// Get all shops or search shops
 server.get('/shops', verifyToken, (req, res) => {
-    const { name, location, rating, id } = req.query;
+    const { name, location, rating } = req.query;
     let query = 'SELECT * FROM shop WHERE 1=1';
     const params = [];
-
-    if (id) {
-        query = 'SELECT * FROM shop WHERE id = ?';
-        db.get(query, [id], (err, shop) => {
-            if (err) {
-                console.error("Error fetching shop:", err);
-                return res.status(500).json({
-                    success: false,
-                    message: "Failed to fetch shop details"
-                });
-            }
-            if (!shop) {
-                return res.status(404).json({
-                    success: false,
-                    message: "Shop not found"
-                });
-            }
-            res.json({
-                success: true,
-                shop: shop
-            });
-        });
-        return;
-    }
 
     if (name) {
         query += ' AND name LIKE ?';
@@ -653,6 +629,193 @@ server.get('/shops', verifyToken, (req, res) => {
     });
 });
 
+// Get single shop
+server.get('/shops/:id', verifyToken, (req, res) => {
+    const shopId = parseInt(req.params.id, 10);
+    
+    db.get('SELECT * FROM shop WHERE id = ?', [shopId], (err, shop) => {
+        if (err) {
+            console.error("Error fetching shop:", err);
+            return res.status(500).json({
+                success: false,
+                message: "Failed to fetch shop details"
+            });
+        }
+        if (!shop) {
+            return res.status(404).json({
+                success: false,
+                message: "Shop not found"
+            });
+        }
+        res.json({
+            success: true,
+            shop: shop
+        });
+    });
+});
+
+// Create new shop
+server.post('/shops', verifyToken, (req, res) => {
+    const { name, location, description, contact, rating } = req.body;
+    const userid = req.userDetails.id;
+
+    if (!name || !location || !contact) {
+        return res.status(400).json({
+            success: false,
+            message: "Name, location, and contact are required"
+        });
+    }
+
+    const query = `
+        INSERT INTO shop (name, location, description, contact, rating, userid)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `;
+
+    db.run(query, [name, location, description, contact, rating || 0, userid], function(err) {
+        if (err) {
+            console.error("Error creating shop:", err);
+            return res.status(500).json({
+                success: false,
+                message: "Failed to create shop"
+            });
+        }
+
+        res.status(201).json({
+            success: true,
+            message: "Shop created successfully",
+            shopId: this.lastID
+        });
+    });
+});
+
+// Update shop
+server.put('/shops/:id', verifyToken, (req, res) => {
+    const shopId = parseInt(req.params.id, 10);
+    const { name, location, description, contact, rating } = req.body;
+    const userId = req.userDetails.id;
+
+    // Check if user owns this shop
+    db.get('SELECT userid FROM shop WHERE id = ?', [shopId], (err, shop) => {
+        if (err) {
+            console.error("Error checking shop ownership:", err);
+            return res.status(500).json({
+                success: false,
+                message: "Failed to verify shop ownership"
+            });
+        }
+
+        if (!shop) {
+            return res.status(404).json({
+                success: false,
+                message: "Shop not found"
+            });
+        }
+
+        if (shop.userid !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: "You don't have permission to update this shop"
+            });
+        }
+
+        let updates = [];
+        let params = [];
+        
+        if (name) {
+            updates.push('name = ?');
+            params.push(name);
+        }
+        if (location) {
+            updates.push('location = ?');
+            params.push(location);
+        }
+        if (description !== undefined) {
+            updates.push('description = ?');
+            params.push(description);
+        }
+        if (contact) {
+            updates.push('contact = ?');
+            params.push(contact);
+        }
+        if (rating !== undefined) {
+            updates.push('rating = ?');
+            params.push(rating);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "No fields to update"
+            });
+        }
+
+        params.push(shopId);
+        const query = `UPDATE shop SET ${updates.join(', ')} WHERE id = ?`;
+
+        db.run(query, params, (err) => {
+            if (err) {
+                console.error("Error updating shop:", err);
+                return res.status(500).json({
+                    success: false,
+                    message: "Failed to update shop"
+                });
+            }
+
+            res.json({
+                success: true,
+                message: "Shop updated successfully"
+            });
+        });
+    });
+});
+
+// Delete shop
+server.delete('/shops/:id', verifyToken, (req, res) => {
+    const shopId = parseInt(req.params.id, 10);
+    const userId = req.userDetails.id;
+
+    // Check if user owns this shop
+    db.get('SELECT userid FROM shop WHERE id = ?', [shopId], (err, shop) => {
+        if (err) {
+            console.error("Error checking shop ownership:", err);
+            return res.status(500).json({
+                success: false,
+                message: "Failed to verify shop ownership"
+            });
+        }
+
+        if (!shop) {
+            return res.status(404).json({
+                success: false,
+                message: "Shop not found"
+            });
+        }
+
+        if (shop.userid !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: "You don't have permission to delete this shop"
+            });
+        }
+
+        const query = `DELETE FROM shop WHERE id = ?`;
+        db.run(query, [shopId], (err) => {
+            if (err) {
+                console.error("Error deleting shop:", err);
+                return res.status(500).json({
+                    success: false,
+                    message: "Failed to delete shop"
+                });
+            }
+
+            res.json({
+                success: true,
+                message: "Shop deleted successfully"
+            });
+        });
+    });
+});
+
 server.get('/shops/:shopid/products', verifyToken, (req, res) => {
     const shopid = parseInt(req.params.shopid, 10);
     const query = `SELECT * FROM products WHERE shopid = ?`;
@@ -669,112 +832,7 @@ server.get('/shops/:shopid/products', verifyToken, (req, res) => {
         res.json({
             success: true,
             shopId: shopid,
-            products: products || []
-        });
-    });
-});
-
-// Create shop
-server.post('/shops', verifyToken, (req, res) => {
-    const { name, location, contact, phonenumber, rating } = req.body;
-
-    if (!name || !location || !contact || !phonenumber) {
-        return res.status(400).json({
-            success: false,
-            message: 'Name, location, contact, and phone number are required'
-        });
-    }
-
-    const query = `INSERT INTO shop (name, location, contact, phonenumber, rating) VALUES (?, ?, ?, ?, ?)`;
-    db.run(query, [name, location, contact, phonenumber, rating || 0], function(err) {
-        if (err) {
-            console.error("Error creating shop:", err);
-            return res.status(500).json({
-                success: false,
-                message: 'Error creating shop'
-            });
-        }
-
-        res.status(201).json({
-            success: true,
-            message: 'Shop created successfully',
-            shopId: this.lastID
-        });
-    });
-});
-
-// Update shop
-server.put('/shops/:shopid', verifyToken, (req, res) => {
-    const shopid = parseInt(req.params.shopid, 10);
-    const { name, location, contact, phonenumber, rating } = req.body;
-
-    if (!name && !location && !contact && !phonenumber && !rating) {
-        return res.status(400).json({
-            success: false,
-            message: 'At least one field required (name, location, contact, phonenumber, rating)'
-        });
-    }
-
-    const updates = [];
-    const values = [];
-
-    if (name) {
-        updates.push("name = ?");
-        values.push(name);
-    }
-    if (location) {
-        updates.push("location = ?");
-        values.push(location);
-    }
-    if (contact) {
-        updates.push("contact = ?");
-        values.push(contact);
-    }
-    if (phonenumber) {
-        updates.push("phonenumber = ?");
-        values.push(phonenumber);
-    }
-    if (rating) {
-        updates.push("rating = ?");
-        values.push(rating);
-    }
-
-    const query = `UPDATE shop SET ${updates.join(', ')} WHERE id = ?`;
-    values.push(shopid);
-
-    db.run(query, values, (err) => {
-        if (err) {
-            console.error("Error updating shop:", err);
-            return res.status(500).json({
-                success: false,
-                message: 'Error updating shop'
-            });
-        }
-
-        res.json({
-            success: true,
-            message: 'Shop updated successfully'
-        });
-    });
-});
-
-// Delete shop
-server.delete('/shops/:shopid', verifyToken, (req, res) => {
-    const shopid = parseInt(req.params.shopid, 10);
-    
-    const query = `DELETE FROM shop WHERE id = ?`;
-    db.run(query, [shopid], (err) => {
-        if (err) {
-            console.error("Error deleting shop:", err);
-            return res.status(500).json({
-                success: false,
-                message: 'Error deleting shop'
-            });
-        }
-
-        res.json({
-            success: true,
-            message: 'Shop deleted successfully'
+            products: products
         });
     });
 });
@@ -788,19 +846,67 @@ server.post('/shops/:shopid/products/add', verifyToken, (req, res) => {
     let category= req.body.category;
 
     if (!name || !price || !quantity || !category) {
-        return res.status(400).send("Missing required fields");
+        return res.status(400).json({
+            success: false,
+            message: 'All fields are required'
+        });
     }
 
-    const query = `
-        INSERT INTO products (name, description, price, quantity, category, shopid)
-        VALUES (?,?,?,?,?,?)
-    `;
-
-    db.run(query, [name,description,price,quantity,category,shopid],(err) => {
+    const query = `INSERT INTO products (name, description, price, quantity, category, shopid) VALUES (?, ?, ?, ?, ?, ?)`;
+    db.run(query, [name, description, price, quantity, category, shopid], function(err) {
         if (err) {
-            return res.status(500).send('Error adding product');
+            console.error("Error adding product:", err);
+            return res.status(500).json({
+                success: false,
+                message: 'Error adding product'
+            });
         }
-        res.status(201).json({ message: 'Product added successfully' });
+
+        res.status(201).json({
+            success: true,
+            message: 'Product added successfully',
+            productId: this.lastID
+        });
+    });
+});
+
+server.put('/shops/:shopid/products/:productid', verifyToken, (req, res) => {
+    const shopid = parseInt(req.params.shopid, 10);
+    const productid = parseInt(req.params.productid, 10);
+    const updates = [];
+    const values = [];
+
+    const fields = ['name', 'description', 'price', 'quantity', 'category'];
+    for (const field of fields) {
+        if (req.body[field]) {
+            updates.push(`${field} = ?`);
+            values.push(req.body[field]);
+        }
+    }
+
+    if (updates.length === 0) {
+        return res.status(400).json({
+            success: false,
+            message: 'No fields to update'
+        });
+    }
+
+    values.push(productid, shopid);
+    const query = `UPDATE products SET ${updates.join(', ')} WHERE id = ? AND shopid = ?`;
+
+    db.run(query, values, (err) => {
+        if (err) {
+            console.error("Error updating product:", err);
+            return res.status(500).json({
+                success: false,
+                message: 'Error updating product'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Product updated successfully'
+        });
     });
 });
 
@@ -808,173 +914,24 @@ server.delete('/shops/:shopid/products/:productid', verifyToken, (req, res) => {
     const shopid = parseInt(req.params.shopid, 10);
     const productid = parseInt(req.params.productid, 10);
 
-    if (!shopid || !productid) {
-        return res.status(400).send("Shop ID and Product ID are required.");
-        }
-
     const query = `DELETE FROM products WHERE id = ? AND shopid = ?`;
-
-    db.run(query,[productid,shopid], (err) => {
-            if (err) {
-            console.error("Error deleting product:", err.message);
-            return res.status(500).send("Failed to delete product.");
-            }
-
-        res.status(200).json({ message: "Product deleted successfully." });
-        });
-    });
-
-server.put('/shops/:shopid/products/:productid', verifyToken, (req, res) => {
-    const shopid = parseInt(req.params.shopid, 10);
-    const productid = parseInt(req.params.productid, 10);
-    let name= req.body.name;
-    let description= req.body.description;
-    let price= req.body.price;
-    let quantity= req.body.quantity;
-    let category= req.body.category;
-
-    if (!shopid || !productid) {
-        return res.status(400).send("Shop ID and Product ID are required.");
-    }
-
-    if (!name && !description && !price && !quantity && !category) {
-        return res.status(400).send("At least one field to update must be provided.");
-    }
-
-    const updates = [];
-    if (name) updates.push(`name = '${name}'`);
-    if (description) updates.push(`description = '${description}'`);
-    if (price) updates.push(`price = ${price}`);
-    if (quantity) updates.push(`quantity = ${quantity}`);
-    if (category) updates.push(`category = '${category}'`);
-
-    const query = `UPDATE products SET ${updates.join(', ')} WHERE id = ${productid} AND shopid = ${shopid}`;
-
-    db.run(query, (err) => {
+    db.run(query, [productid, shopid], (err) => {
         if (err) {
-            console.error("Error updating product:", err.message);
-            return res.status(500).send("Failed to update product.");
-        }
-        else{
-        res.status(200).send("Product updated successfully.");
-        }
-    });
-});
-
-server.post('/shops/:shopid/products/:productid/buy', verifyToken, (req, res) => {
-    const shopId = parseInt(req.params.shopid, 10);
-    const productId = parseInt(req.params.productid, 10);
-    const userId = req.userDetails.id;  
-    const { quantity = 1 } = req.body;  
-
-    if (!shopId || !productId) {
-        return res.status(400).json({
-            success: false,
-            message: "Shop ID and Product ID are required."
-        });
-    }
-
-    const fetch_product_query = `SELECT * FROM products WHERE id = ? AND shopid = ?`;
-    db.get(fetch_product_query, [productId, shopId], (err, product) => {
-        if (err) {
-            console.error("Error fetching product details:", err);
+            console.error("Error deleting product:", err);
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch product details"
+                message: 'Error deleting product'
             });
         }
 
-        if (!product) {
-            return res.status(404).json({
-                success: false,
-                message: "Product not found in the specified shop"
-            });
-        }
-
-        if (product.quantity < quantity) {
-            return res.status(400).json({
-                success: false,
-                message: "Not enough stock available"
-            });
-        }
-
-        const totalPrice = product.price * quantity;
-        const updated_quantity = product.quantity - quantity;
-        
-        // Update product quantity
-        const update_product_query = `UPDATE products SET quantity = ? WHERE id = ? AND shopid = ?`;
-        db.run(update_product_query, [updated_quantity, productId, shopId], (err) => {
-            if (err) {
-                console.error("Error updating product quantity:", err);
-                return res.status(500).json({
-                    success: false,
-                    message: "Failed to update product quantity"
-                });
-            }
-
-            const insert_purchase_query = `
-                INSERT INTO purchases (userid, productid, shopid, quantity, totalprice, purchasedate)
-                VALUES (?, ?, ?, ?, ?, datetime('now'))
-            `;
-
-            db.run(insert_purchase_query, [userId, productId, shopId, quantity, totalPrice], function(err) {
-                if (err) {
-                    console.error("Error recording purchase:", err);
-                    return res.status(500).json({
-                        success: false,
-                        message: "Failed to record purchase"
-                    });
-                }
-
-                res.status(201).json({
-                    success: true,
-                    message: "Purchase successful",
-                    purchase: {
-                        id: this.lastID,
-                        productName: product.name,
-                        quantity: quantity,
-                        totalPrice: totalPrice,
-                        date: new Date().toISOString()
-                    }
-                });
-            });
+        res.json({
+            success: true,
+            message: 'Product deleted successfully'
         });
     });
 });
 
-//dashboard
-server.get('/user/dashboard/:userid', verifyToken, (req, res) => {
-    const userId = parseInt(req.params.userid, 10);
-
-    if (!userId) {
-        return res.status(400).send("User ID is required." );
-    }
-
-    const petProfilesQuery = `SELECT * FROM pet WHERE userid = ?`;
-    const appointmentsQuery = `SELECT * FROM appointments WHERE userid = ? ORDER BY appointmentdate ASC, appointmenttime ASC`;
-
-    db.all(petProfilesQuery, [userId], (err, petProfiles) => {
-        if (err) {
-            console.error("Error fetching pet profiles:", err.message);
-            return res.status(500).send("Error fetching pet profiles." );
-        }
-
-        db.all(appointmentsQuery, [userId], (err, appointments) => {
-            if (err) {
-                console.error("Error fetching appointments:", err.message);
-                return res.status(500).send("Error fetching appointments." );
-            }
-            return res.status(200).json({
-                message: "User Dashboard",
-                userId,
-                petProfiles,
-                appointments
-            });
-        });
-    });
-});
-
-// Submit feedback for a vet
+// Feedback endpoints
 server.post('/vets/:vetid/feedback', verifyToken, (req, res) => {
     const vetId = parseInt(req.params.vetid, 10);
     const userId = req.userDetails.id;
@@ -1170,6 +1127,38 @@ server.get('/vets/:vetid/available-slots', verifyToken, (req, res) => {
                 vetId: vetId,
                 date: date,
                 availableSlots: slots
+            });
+        });
+    });
+});
+
+//dashboard
+server.get('/user/dashboard/:userid', verifyToken, (req, res) => {
+    const userId = parseInt(req.params.userid, 10);
+
+    if (!userId) {
+        return res.status(400).send("User ID is required." );
+    }
+
+    const petProfilesQuery = `SELECT * FROM pet WHERE userid = ?`;
+    const appointmentsQuery = `SELECT * FROM appointments WHERE userid = ? ORDER BY appointmentdate ASC, appointmenttime ASC`;
+
+    db.all(petProfilesQuery, [userId], (err, petProfiles) => {
+        if (err) {
+            console.error("Error fetching pet profiles:", err.message);
+            return res.status(500).send("Error fetching pet profiles." );
+        }
+
+        db.all(appointmentsQuery, [userId], (err, appointments) => {
+            if (err) {
+                console.error("Error fetching appointments:", err.message);
+                return res.status(500).send("Error fetching appointments." );
+            }
+            return res.status(200).json({
+                message: "User Dashboard",
+                userId,
+                petProfiles,
+                appointments
             });
         });
     });

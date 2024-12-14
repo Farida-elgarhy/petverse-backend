@@ -74,11 +74,10 @@ const createshopstable = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     location TEXT NOT NULL,
+    description TEXT,
     contact TEXT NOT NULL,
-    phonenumber INTEGER NOT NULL,
-    rating REAL NOT NULL,
+    rating REAL DEFAULT 0,
     userid INTEGER,
-    availableslots TEXT NOT NULL,
     FOREIGN KEY (userid) REFERENCES user(id)
   )`;
 
@@ -95,22 +94,6 @@ const createproductstable = `
     shopid INTEGER,
     FOREIGN KEY (shopid) REFERENCES shop (id)
     )`;
-
-//purchases table
-const createpurchasestable = `
-  CREATE TABLE IF NOT EXISTS purchases (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    userid INTEGER,
-    productid INTEGER,
-    shopid INTEGER,
-    quantity INTEGER NOT NULL DEFAULT 1,
-    totalprice REAL NOT NULL,
-    purchasedate TEXT NOT NULL,
-    FOREIGN KEY (userid) REFERENCES user (id),
-    FOREIGN KEY (productid) REFERENCES products (id),
-    FOREIGN KEY (shopid) REFERENCES shop (id)
-  )`;
-
 
 // Create tables
 db.serialize(() => { 
@@ -169,14 +152,6 @@ db.serialize(() => {
           console.log("Products table created successfully!");
       }
   });
-
-  db.exec(createpurchasestable, (err) => {
-      if (err) {
-          console.error("Error creating purchases table:", err);
-      } else {
-          console.log("Purchases table created successfully!");
-      }
-  });
 });
 
-module.exports = { db, createusertable, createpettable, createappointmentstable,createfeedbacktable, createproductstable,createvetstable,createshopstable,createpurchasestable};
+module.exports = { db, createusertable, createpettable, createappointmentstable, createfeedbacktable, createproductstable, createvetstable, createshopstable };
