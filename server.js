@@ -11,9 +11,7 @@ const secret_key = 'PetVerseSecretKey2024';
 
 server.use(cors({
     origin: "http://localhost:3000",
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
 }));
 server.use(express.json());
 server.use(cookieParser());
@@ -27,72 +25,101 @@ db.all('SELECT * FROM user', [], (err, rows) => {
     }
 });
 
-const generateToken = (id, isAdmin) => {
-    return jwt.sign({ id, isAdmin }, secret_key, { expiresIn: '2h' });
+const generateToken = (id) => {
+    return jwt.sign({ id }, secret_key, { expiresIn: '2h' });
 };
 
 const verifyToken = (req, res, next) => {
     console.log('Cookies received:', req.cookies);
     const token = req.cookies.authToken;
+    
     if (!token) {
         console.log('No auth token found in cookies');
-        return res.status(401).send('Unauthorized');
+        return res.status(401).json({
+            success: false,
+            message: 'Authentication required. Please log in.',
+            code: 'AUTH_REQUIRED'
+        });
     }
     
-    console.log('Verifying token:', token);
     jwt.verify(token, secret_key, (err, details) => {
         if (err) {
             console.error('Token verification failed:', err);
-            return res.status(403).send('Invalid or expired token');
+            if (err.name === 'TokenExpiredError') {
+                return res.status(401).json({
+                    success: false,
+                    message: 'Session expired. Please log in again.',
+                    code: 'TOKEN_EXPIRED'
+                });
+            }
+            return res.status(403).json({
+                success: false,
+                message: 'Invalid authentication token.',
+                code: 'INVALID_TOKEN'
+            });
         }
-        console.log('Token verified successfully. User details:', details);
-        req.userDetails = details;
-        next();
+        
+        // Check if user still exists
+        db.get('SELECT id FROM user WHERE id = ?', [details.id], (err, user) => {
+            if (err) {
+                console.error('Database error during auth check:', err);
+                return res.status(500).json({
+                    success: false,
+                    message: 'Internal server error during authentication.',
+                    code: 'AUTH_ERROR'
+                });
+            }
+            
+            if (!user) {
+                return res.status(401).json({
+                    success: false,
+                    message: 'User no longer exists.',
+                    code: 'USER_NOT_FOUND'
+                });
+            }
+            
+            req.userDetails = details;
+            next();
+        });
     });
 };
 
-// Add this near the top of your routes
-server.get('/test', (req, res) => {
-    console.log('Test endpoint hit');
-    res.json({ message: 'Server is running!' });
-});
-
 // Add check-auth endpoint
 server.get('/user/check-auth', verifyToken, (req, res) => {
-    // If we get here, the token is valid
     const userId = req.userDetails.id;
     
-    // Get user data from database
-    db.get('SELECT id, name, email, isadmin FROM user WHERE id = ?', [userId], (err, user) => {
+    db.get('SELECT id, name, email FROM user WHERE id = ?', [userId], (err, user) => {
         if (err) {
             console.error('Database error:', err);
             return res.status(500).json({ 
-                isAuthenticated: false,
+                success: false,
                 message: 'Error checking authentication status'
             });
         }
         
         if (!user) {
             return res.status(404).json({ 
-                isAuthenticated: false,
+                success: false,
                 message: 'User not found'
             });
         }
 
-        const newToken = generateToken(user.id, user.isadmin);
+        const newToken = generateToken(user.id);
         
         res.cookie('authToken', newToken, {
             httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
             sameSite: 'strict',
-            maxAge: 24 * 60 * 60 * 1000 // 1 day
+            maxAge: 2 * 60 * 60 * 1000 // 2 hours
         });
 
         res.json({
-            isAuthenticated: true,
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            isAdmin: user.isadmin === 1
+            success: true,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email
+            }
         });
     });
 });
@@ -144,8 +171,8 @@ server.post('/user/register', (req, res) => {
             }
 
             const insertQuery = `
-                INSERT INTO user (name, email, password, age, isadmin) 
-                VALUES (?, ?, ?, ?, 0)
+                INSERT INTO user (name, email, password, age) 
+                VALUES (?, ?, ?, ?)
             `;
 
             db.run(insertQuery, [name, email, hashedPassword, age], function(err) {
@@ -161,7 +188,7 @@ server.post('/user/register', (req, res) => {
                     console.log('Newly registered user:', { ...user, password: '***' });
                 });
 
-                const token = generateToken(this.lastID, 0);
+                const token = generateToken(this.lastID);
 
                 res.cookie('authToken', token, {
                     httpOnly: true,
@@ -175,8 +202,7 @@ server.post('/user/register', (req, res) => {
                     user: {
                         id: this.lastID,
                         name: name,
-                        email: email,
-                        isAdmin: false
+                        email: email
                     }
                 });
             });
@@ -190,9 +216,6 @@ server.post('/user/logout', (req, res) => {
     res.status(200).send('Logged out successfully');
 });
 
-    
-
-
 //login
 server.post('/user/login', (req, res) => {
     const email = req.body.email;
@@ -201,57 +224,60 @@ server.post('/user/login', (req, res) => {
     if (!email || !password) {
         return res.status(400).json({
             success: false,
-            message: "Email and password are required"
+            message: 'Email and password are required'
         });
     }
 
     const query = 'SELECT * FROM user WHERE email = ?';
     db.get(query, [email], (err, user) => {
         if (err) {
-            console.error("Database error:", err);
+            console.error('Database error during login:', err);
             return res.status(500).json({
                 success: false,
-                message: "An error occurred. Please try again."
+                message: 'Login failed. Please try again.'
             });
         }
 
         if (!user) {
             return res.status(401).json({
                 success: false,
-                message: "Invalid email or password"
+                message: 'Invalid email or password'
             });
         }
 
-        bcrypt.compare(password, user.password, (err, isMatch) => {
+        bcrypt.compare(password, user.password, (err, match) => {
             if (err) {
-                console.error("Error comparing passwords:", err);
+                console.error('Password comparison error:', err);
                 return res.status(500).json({
                     success: false,
-                    message: "An error occurred during login"
+                    message: 'Login failed. Please try again.'
                 });
             }
 
-            if (!isMatch) {
+            if (!match) {
                 return res.status(401).json({
                     success: false,
-                    message: "Invalid email or password"
+                    message: 'Invalid email or password'
                 });
             }
 
-            const token = generateToken(user.id, user.isadmin === 1);
-
+            const token = generateToken(user.id);
+            
             res.cookie('authToken', token, {
                 httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
                 sameSite: 'strict',
-                maxAge: 24 * 60 * 60 * 1000 // 1 day
+                maxAge: 2 * 60 * 60 * 1000 // 2 hours
             });
 
             res.json({
                 success: true,
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                isAdmin: user.isadmin === 1
+                message: 'Login successful',
+                user: {
+                    id: user.id,
+                    name: user.name,
+                    email: user.email
+                }
             });
         });
     });
@@ -513,594 +539,180 @@ server.get('/petprofiles', verifyToken, (req,res)=>{
 
 //getting all vets
 server.get('/vets', verifyToken, (req, res) => {
-    let type= req.query.type;
-    let location= req.query.location;
-    let rating= req.query.rating;
+    const { type, location, rating, id } = req.query;
+    let query = 'SELECT * FROM vets WHERE 1=1';
+    const params = [];
 
-    const query = 'SELECT * FROM vets';
-    db.all(query, [], (err, rows) => {
+    if (id) {
+        query = 'SELECT * FROM vets WHERE id = ?';
+        db.get(query, [id], (err, vet) => {
+            if (err) {
+                console.error("Error fetching vet:", err);
+                return res.status(500).json({
+                    success: false,
+                    message: "Failed to fetch vet details"
+                });
+            }
+            if (!vet) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Vet not found"
+                });
+            }
+            res.json({
+                success: true,
+                vet: vet
+            });
+        });
+        return;
+    }
+
+    if (type) {
+        query += ' AND specialisation LIKE ?';
+        params.push(`%${type}%`);
+    }
+    if (location) {
+        query += ' AND location LIKE ?';
+        params.push(`%${location}%`);
+    }
+    if (rating) {
+        query += ' AND rating >= ?';
+        params.push(rating);
+    }
+
+    db.all(query, params, (err, vets) => {
         if (err) {
             console.error("Error fetching vets:", err);
             return res.status(500).json({
                 success: false,
-                message: 'Error fetching vets'
+                message: "Failed to fetch vets"
             });
         }
         res.json({
             success: true,
-            vets: rows
+            vets: vets
         });
     });
 });
 
-//vets search
-server.get('/vets/search', verifyToken, (req, res) => {
-    let name = req.query.name;
-    let specialisation = req.query.specialisation;
-    let rating = req.query.rating;
-    let location = req.query.location;
+//shops search
+server.get('/shops', verifyToken, (req, res) => {
+    const { name, location, rating, id } = req.query;
+    let query = 'SELECT * FROM shop WHERE 1=1';
+    const params = [];
 
-    if (!specialisation && !location && !rating && !name) {
-        return res.status(400).send("Choose at least one filter");
+    if (id) {
+        query = 'SELECT * FROM shop WHERE id = ?';
+        db.get(query, [id], (err, shop) => {
+            if (err) {
+                console.error("Error fetching shop:", err);
+                return res.status(500).json({
+                    success: false,
+                    message: "Failed to fetch shop details"
+                });
+            }
+            if (!shop) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Shop not found"
+                });
+            }
+            res.json({
+                success: true,
+                shop: shop
+            });
+        });
+        return;
     }
 
-    let searchquery = 'SELECT * FROM vets WHERE 1=1';
-    let params = [];
-
-    if (specialisation) {
-        searchquery += ` AND specialisation LIKE ?`;
-        params.push(`%${specialisation}%`);
-    }
     if (name) {
-        searchquery += ` AND name LIKE ?`;
+        query += ' AND name LIKE ?';
         params.push(`%${name}%`);
     }
     if (location) {
-        searchquery += ` AND location LIKE ?`;
+        query += ' AND location LIKE ?';
         params.push(`%${location}%`);
     }
-
     if (rating) {
-        searchquery += ` AND rating >= ?`;
-        params.push(rating);    }
+        query += ' AND rating >= ?';
+        params.push(rating);
+    }
 
-    console.log("Search Results: ", searchquery);
-    console.log("Query Parameters: ", params);
-    db.all(searchquery, params, (err, rows) => {
-
+    db.all(query, params, (err, shops) => {
         if (err) {
-            console.error("Error fetching vets:", err.message);
-            return res.status(500).send("Failed to fetch vets.");
-        }
-        return res.status(200).json(rows);
-    });
-});
-
-server.get('/vets/search/:vetid', verifyToken, (req, res) => {
-    const servicesquery = `SELECT * FROM vets WHERE id=?`
-    db.get(servicesquery,[req.params.vetid], (err, row) => {
-        if (err) {
-            console.log(err);
-            return res.status(500).send('Error fetching vet details');
-        }
-        if (!row) {
-            return res.status(404).send(`vet not found`);
-        }
-        return res.status(200).json(row);
-    });
-});
-
-server.put('/vet/update/:vetid', verifyToken, (req, res) => {
-    const vetid = parseInt(req.params.vetid, 10);
-    let name = req.body.name;
-    let specialisation = req.body.specialisation;
-    let location = req.body.location;
-    let email = req.body.email;
-    let phonenumber = req.body.phonenumber;
-    let rating = req.body.rating;
-    let contact = req.body.contact;
-
-    if (!name && !specialisation && !location && !email && !phonenumber && !rating && !contact) {
-        return res.status(400).send('At least one field required (name, specialisation, location, email, phonenumber, rating, contact)');
-    }
-
-    const updates = [];
-    const values = [];
-
-    if (name) {
-        updates.push("name = ?");
-        values.push(name);
-    }
-    if (specialisation) {
-        updates.push("specialisation = ?");
-        values.push(specialisation);
-    }
-    if (location) {
-        updates.push("location = ?");
-        values.push(location);
-    }
-    if (email) {
-        updates.push("email = ?");
-        values.push(email);
-    }
-    if (phonenumber) {
-        updates.push("phonenumber = ?");
-        values.push(phonenumber);
-    }
-    if (rating) {
-        updates.push("rating = ?");
-        values.push(rating);
-    }
-    if (contact) {
-        updates.push("contact = ?");
-        values.push(contact);
-    }
-
-    const query = `UPDATE vets SET ${updates.join(', ')} WHERE id = ?`;
-    values.push(vetid);
-
-    db.run(query, values, (err) => {
-        if (err) {
-            return res.status(500).send('Error updating vet data');
-        }
-        res.status(200).send('Vet data updated successfully');
-    });
-});
-
-//admin deleting a service using its id
-server.delete('/vet/delete/:vetid', verifyToken, (req, res) => {
-    const vetid = parseInt(req.params.vetid, 10);
-    const query = `DELETE FROM vets WHERE id = ?`;
-
-    db.run(query, [vetid], (err) => {
-        if (err) {
-            return res.status(500).send('Error deleting vet data');
-        }
-        res.status(200).send('Vet deleted successfully');
-    });
-});
-
-//adding service
-server.post('/vet/add', verifyToken, (req, res) => {
-    let name = req.body.name;
-    let specialisation = req.body.specialisation;
-    let location = req.body.location;
-    let email = req.body.email;
-    let phonenumber = req.body.phonenumber;
-    let rating = req.body.rating;
-    let contact = req.body.contact;
-
-    if (!name || !specialisation || !location || !email || !phonenumber || !rating || !contact) {
-        return res.status(400).json({
-            error: 'All fields are required: name, specialisation, location, email, phonenumber, rating, and contact'
-        });
-    }
-
-    if (rating < 0 || rating > 5) {
-        return res.status(400).json({
-            error: 'Rating must be between 0 and 5'
-        });
-    }
-
-    const query = `INSERT INTO vets (name, specialisation, email, location, phonenumber, rating, contact) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?)`;
-
-    db.run(query, [name, specialisation, email, location, phonenumber, rating, contact], (err) => {
-        if (err) {
-            return res.status(500).send('Error adding new vet');
-        }
-        res.status(201).send('vet added successfully');
-    });
-});
-
-//service feedback
-server.post('/vets/:vetid/feedback', verifyToken, (req, res) => {
-    const vetid = parseInt(req.params.vetid, 10);
-    const email = req.body.email;
-    const rating = req.body.rating;
-    const comment = req.body.comment;
-
-    if (!vetid ||!rating) {
-        return res.status(400).send('Rating and vet id is required');
-    }
-
-    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-        return res.status(400).send('Rating must be a whole number between 1 and 5')
-    }
-
-    const checkVetQuery = `SELECT id FROM vets WHERE id = ?`;
-    db.get(checkVetQuery, [vetid], (err, vet) => {
-        if (err) {
-            console.error("Error checking vet:", err);
-            return res.status(500).send("Database error" );
-        }
-
-        if (!vet) {
-            return res.status(404).send("Vet not found");
-        }
-
-            const insertFeedbackQuery = `
-            INSERT INTO feedback (user_id, vet_id, rating, comment)
-                VALUES (?, ?, ?, ?)
-            `;
-        db.run(insertFeedbackQuery, [ vetid, rating, comment],(err)=> {
-                if (err) {
-                    console.error("Error adding feedback:", err);
-                    return res.status(500).send('Error adding feedback.');
-                }
-
-                return res.status(201).send(`Feedback added successfully`);
-            });
-
-    });
-});
-
-// user feedback for the website
-server.post('/user/feedback', verifyToken, (req, res) => {
-    let rating = req.body.rating;
-    let comment = req.body.comment;
-    let vetid = req.body.vetid;  
-    const userid = req.userDetails.id;  
-
-    if (!rating) {
-        return res.status(400).json({
-            message: "Rating is required."
-        });
-    }
-
-    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-        return res.status(400).json({
-            message: "Rating must be a whole number between 1 and 5"
-        });
-    }
-
-    const feedbackQuery = `INSERT INTO feedback (rating, comment, userid, vetid) VALUES (?, ?, ?, ?)`;
-    db.run(feedbackQuery, [rating, comment, userid, vetid], function(err) {
-        if (err) {
-            console.error('Error submitting feedback:', err);
+            console.error("Error fetching shops:", err);
             return res.status(500).json({
-                message: "Error submitting feedback"
+                success: false,
+                message: "Failed to fetch shops"
+            });
+        }
+        res.json({
+            success: true,
+            shops: shops
+        });
+    });
+});
+
+server.get('/shops/:shopid/products', verifyToken, (req, res) => {
+    const shopid = parseInt(req.params.shopid, 10);
+    const query = `SELECT * FROM products WHERE shopid = ?`;
+    
+    db.all(query, [shopid], (err, products) => {
+        if (err) {
+            console.error("Error fetching products for shop:", err);
+            return res.status(500).json({
+                success: false,
+                message: 'Error fetching products'
+            });
+        }
+        
+        res.json({
+            success: true,
+            shopId: shopid,
+            products: products || []
+        });
+    });
+});
+
+// Create shop
+server.post('/shops', verifyToken, (req, res) => {
+    const { name, location, contact, phonenumber, rating } = req.body;
+
+    if (!name || !location || !contact || !phonenumber) {
+        return res.status(400).json({
+            success: false,
+            message: 'Name, location, contact, and phone number are required'
+        });
+    }
+
+    const query = `INSERT INTO shop (name, location, contact, phonenumber, rating) VALUES (?, ?, ?, ?, ?)`;
+    db.run(query, [name, location, contact, phonenumber, rating || 0], function(err) {
+        if (err) {
+            console.error("Error creating shop:", err);
+            return res.status(500).json({
+                success: false,
+                message: 'Error creating shop'
             });
         }
 
         res.status(201).json({
-            message: "Feedback submitted successfully",
-            feedbackId: this.lastID
-        });
-    });
-});
-
-//admin getting all the feedbacks
-server.get(`/admin/feedback`, verifyToken, (req, res) => {
-    const feedbackquery = `SELECT * FROM feedback`
-    db.all(feedbackquery, [], (err, rows) => {
-        if (err) {
-            console.error('Error fetching feedback:', err.message);
-            return res.status(500).send( "Error fetching feedback data. Please try again later.");
-        }
-        else
-            return res.json(rows)
-    });
-});
-
-//APPOINTMENTS  
-//displaying all the appointments
-server.post('/vets/:vetid/bookingappointments', verifyToken, (req, res) => {
-    let vetid = parseInt(req.params.vetid, 10);
-    let userid= req.body.userid
-    let bookingslot  = req.body.bookingslot;
-
-    if (!userid || !bookingslot) {
-        return res.status(400).send("User ID and selected slot are required.");
-    }
-
-    const fetch_slots_query = `SELECT availableslots FROM vets WHERE id = ?`;
-    db.get(fetch_slots_query, [vetid],(err, row) => {
-        if (err) {
-            console.error("Error fetching available slots:", err.message);
-            return res.status(500).send("Failed to fetch available slots.");
-        }
-
-        if (!row || !row.availableslots) {
-            return res.status(404).send("No available booking slots for this vet.");
-        }
-
-        const available_slots = row.availableslots.split(',');
-        const updated_slots_array = available_slots.filter(slot => slot !== bookingslot);
-
-        if (updated_slots_array.length === available_slots.length) {
-            return res.status(400).json({ message: "Selected slot is not available." });
-        }
-
-        const updated_slots = updated_slots_array.join(',');
-
-        const update_slots_query = `UPDATE vets SET availableslots = ? WHERE id = ?`;
-        db.run(update_slots_query, [updated_slots, vetid], (err) => {
-            if (err) {
-                console.error("Error updating slots:", err.message);
-                return res.status(500).json({ message: "Failed to update available slots." });
-            }
-
-            const [appointment_date, appointment_time] = bookingslot.split(' '); 
-            const insert_appointment_query = `
-                INSERT INTO appointments (userid, vetid, appointmentdate, appointmenttime)
-                VALUES (?,?,?,?)
-            `;
-
-            db.run(insert_appointment_query,[userid,vetid,appointment_date,appointment_time], function (err) {
-                if (err) {
-                    console.error("Error booking appointment:", err.message);
-                    return res.status(500).json({ message: "Failed to confirm booking." });
-                }
-                return res.status(201).json({
-                    message: "Booking confirmed!",
-                    appointment_date,
-                    appointment_time
-                });
-            });
-        });
-    });
-});
-
-// Get user appointments
-server.get('/user/appointments', verifyToken, (req, res) => {
-    const userId = req.userDetails.id;
-    console.log('Fetching appointments for user:', userId);
-
-    const query = `
-        SELECT 
-            a.id,
-            a.appointmentdate,
-            a.slot as bookingslot,
-            a.status,
-            v.name as vetName,
-            v.specialisation as vetSpecialisation,
-            v.location as vetLocation,
-            v.contact as vetContact,
-            v.email as vetEmail,
-            v.phonenumber as vetPhone
-        FROM appointments a
-        JOIN vets v ON a.vetid = v.id
-        WHERE a.userid = ?
-        ORDER BY a.appointmentdate DESC, a.slot ASC
-    `;
-
-    db.all(query, [userId], (err, rows) => {
-        if (err) {
-            console.error("Error fetching appointments:", err);
-            return res.status(500).json({
-                success: false,
-                message: 'Error fetching appointments'
-            });
-        }
-
-        console.log('Found appointments:', rows);
-
-        // Format appointments
-        const appointments = rows.map(row => ({
-            id: row.id,
-            date: row.appointmentdate,
-            time: row.bookingslot,
-            status: row.status || 'scheduled',
-            vet: {
-                name: row.vetName,
-                specialisation: row.vetSpecialisation,
-                location: row.vetLocation,
-                contact: row.vetContact,
-                email: row.vetEmail,
-                phone: row.vetPhone
-            }
-        }));
-
-        res.json({
             success: true,
-            appointments
+            message: 'Shop created successfully',
+            shopId: this.lastID
         });
     });
 });
 
-// Book appointment
-server.post('/vets/:vetid/appointments', verifyToken, (req, res) => {
-    const vetId = parseInt(req.params.vetid, 10);
-    const userId = req.userDetails.id;
-    const { date, slot } = req.body;
-
-    if (!date || !slot) {
-        return res.status(400).json({
-            success: false,
-            message: 'Date and time slot are required'
-        });
-    }
-
-    // First check if the slot is available
-    const checkQuery = `
-        SELECT COUNT(*) as count 
-        FROM appointments 
-        WHERE vetid = ? AND appointmentdate = ? AND slot = ?
-    `;
-
-    db.get(checkQuery, [vetId, date, slot], (err, row) => {
-        if (err) {
-            console.error("Error checking slot availability:", err);
-            return res.status(500).json({
-                success: false,
-                message: 'Error checking appointment availability'
-            });
-        }
-
-        if (row.count > 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'This time slot is already booked'
-            });
-        }
-
-        // If slot is available, book it
-        const insertQuery = `
-            INSERT INTO appointments (userid, vetid, appointmentdate, slot, status)
-            VALUES (?, ?, ?, ?, 'scheduled')
-        `;
-
-        db.run(insertQuery, [userId, vetId, date, slot], function(err) {
-            if (err) {
-                console.error("Error booking appointment:", err);
-                return res.status(500).json({
-                    success: false,
-                    message: 'Error booking appointment'
-                });
-            }
-
-            res.json({
-                success: true,
-                message: 'Appointment booked successfully',
-                appointmentId: this.lastID
-            });
-        });
-    });
-});
-
-// Cancel appointment
-server.post('/appointments/:id/cancel', verifyToken, (req, res) => {
-    const appointmentId = parseInt(req.params.id, 10);
-    const userId = req.userDetails.id;
-
-    // First verify that this appointment belongs to the user
-    const checkQuery = 'SELECT userid FROM appointments WHERE id = ?';
-    
-    db.get(checkQuery, [appointmentId], (err, row) => {
-        if (err) {
-            console.error("Error checking appointment:", err);
-            return res.status(500).json({
-                success: false,
-                message: 'Error cancelling appointment'
-            });
-        }
-
-        if (!row) {
-            return res.status(404).json({
-                success: false,
-                message: 'Appointment not found'
-            });
-        }
-
-        if (row.userid !== userId) {
-            return res.status(403).json({
-                success: false,
-                message: 'Not authorized to cancel this appointment'
-            });
-        }
-
-        // Update the appointment status
-        const updateQuery = `
-            UPDATE appointments 
-            SET status = 'cancelled'
-            WHERE id = ?
-        `;
-
-        db.run(updateQuery, [appointmentId], (err) => {
-            if (err) {
-                console.error("Error cancelling appointment:", err);
-                return res.status(500).json({
-                    success: false,
-                    message: 'Error cancelling appointment'
-                });
-            }
-
-            res.json({
-                success: true,
-                message: 'Appointment cancelled successfully'
-            });
-        });
-    });
-});
-
-//shops
-server.get('/shops', verifyToken, (req, res) => {
-    const query = 'SELECT * FROM shop';
-    db.all(query, (err, rows) => {
-        if (err) {
-            return res.status(500).send('Error fetching shops');
-        }
-        res.status(200).json(rows);
-    });
-});
-
-//search shops
-server.get('/shops/search', verifyToken, (req, res) => {
-    let name= req.query.name;
-    let location= req.query.location;
-    let rating= req.query.rating;
-    if (!name && !location && !rating) {
-        return res.status(400).send("Choose at least one filter");
-    }
-    let searchquery = `SELECT * FROM shop WHERE 1=1`;
-    const queryParams = [];
-    if (name) {
-        searchquery += ` AND name LIKE ?`;
-        queryParams.push(`%${name}%`);    }
-    if (location) {
-        searchquery += ` AND location LIKE ?`;
-        queryParams.push(`%${location}%`);
-    }
-    if (rating) {
-        searchquery += ` AND rating >= ?`;
-        queryParams.push(rating);
-    }
-
-    console.log("Search Results: ", searchquery);
-    db.all(searchquery, queryParams, (err, rows) => {
-        if (err) {
-            console.error("Error fetching shops:", err.message);
-            return res.status(500).send("Failed to fetch shops.");
-        }
-
-        return res.status(200).json(rows);
-    });
-});
-
-//searching with shop id 
-server.get('/shops/:shopid', verifyToken, (req, res) => {
+// Update shop
+server.put('/shops/:shopid', verifyToken, (req, res) => {
     const shopid = parseInt(req.params.shopid, 10);
-    const query = `SELECT * FROM shop WHERE id = ?`;
-    db.get(query, [shopid],(err, row) => {
-        if (err) {
-            console.error("Error fetching shop details:", err.message);
-            return res.status(500).send('Error fetching shop details');
-        }
-        if (!row) {
-            return res.status(404).send(`Shop not found`);
-        }
-        return res.status(200).json(row);
-    });
-});
-
-//getting products using shop id
-server.get('/shops/:shopid/products', verifyToken, (req, res) => {
-    const shopid = parseInt(req.params.shopid, 10);
-    const query = `SELECT * FROM products WHERE shopid = ?`;
-    db.all(query, [shopid],(err, rows) => {
-        if (err) {
-            console.error("Error fetching products for shop:", err.message);
-            return res.status(500).send('Error fetching products');
-        }
-        if (rows.length === 0) {
-            return res.status(404).send(`No products found for shop ID = ${shopid}`);
-        }
-        res.status(200).json(rows);
-    });
-});
-
-server.put('/shop/update/:shopid', verifyToken, (req, res) => {
-
-    const shopid = parseInt(req.params.shopid, 10);
-    let name = req.body.name;
-    let location = req.body.location;
-    let contact = req.body.contact;
-    let phonenumber = req.body.phonenumber;
-    let rating = req.body.rating;
+    const { name, location, contact, phonenumber, rating } = req.body;
 
     if (!name && !location && !contact && !phonenumber && !rating) {
-        return res.status(400).send('At least one field required (name, location, contact, phonenumber, rating)');
+        return res.status(400).json({
+            success: false,
+            message: 'At least one field required (name, location, contact, phonenumber, rating)'
+        });
     }
 
     const updates = [];
@@ -1132,46 +744,38 @@ server.put('/shop/update/:shopid', verifyToken, (req, res) => {
 
     db.run(query, values, (err) => {
         if (err) {
-            return res.status(500).send('Error updating shop data');
+            console.error("Error updating shop:", err);
+            return res.status(500).json({
+                success: false,
+                message: 'Error updating shop'
+            });
         }
-        res.status(200).send('Shop data updated successfully');
+
+        res.json({
+            success: true,
+            message: 'Shop updated successfully'
+        });
     });
 });
 
-//deleting shop
-server.delete('/shop/delete/:shopid', verifyToken, (req, res) => {
+// Delete shop
+server.delete('/shops/:shopid', verifyToken, (req, res) => {
     const shopid = parseInt(req.params.shopid, 10);
+    
     const query = `DELETE FROM shop WHERE id = ?`;
-
-    db.run(query, [shopid],(err) => {
+    db.run(query, [shopid], (err) => {
         if (err) {
-            return res.status(500).send('Error deleting shop');
+            console.error("Error deleting shop:", err);
+            return res.status(500).json({
+                success: false,
+                message: 'Error deleting shop'
+            });
         }
-        res.status(200).send('Shop deleted successfully');
-    });
-});
 
-server.post('/shop/add', verifyToken, (req, res) => {
-    let name= req.body.name;
-    let location= req.body.location;
-    let contact= req.body.contact;
-    let phonenumber= req.body.phonenumber;
-    let rating= req.body.rating;
-
-    if (!name || !location || !contact || !phonenumber || !rating) {
-        return res.status(400).send("Missing required fields");
-    }
-
-    const query = `
-        INSERT INTO shop (name, location, contact, phonenumber, rating)
-        VALUES (?,?,?,?,?)
-    `;
-
-    db.run(query, [name,location,contact,phonenumber,rating],(err) => {
-        if (err) {
-            return res.status(500).send('Error adding new shop');
-        }
-        res.status(201).json({ message: 'Shop added successfully' });
+        res.json({
+            success: true,
+            message: 'Shop deleted successfully'
+        });
     });
 });
 
@@ -1369,6 +973,208 @@ server.get('/user/dashboard/:userid', verifyToken, (req, res) => {
         });
     });
 });
+
+// Submit feedback for a vet
+server.post('/vets/:vetid/feedback', verifyToken, (req, res) => {
+    const vetId = parseInt(req.params.vetid, 10);
+    const userId = req.userDetails.id;
+    const { rating, comment } = req.body;
+
+    // Validate input
+    if (!rating || typeof rating !== 'number' || rating < 1 || rating > 5) {
+        return res.status(400).json({
+            success: false,
+            message: 'Rating is required and must be between 1 and 5'
+        });
+    }
+
+    // First check if the vet exists
+    const checkVetQuery = 'SELECT id FROM vets WHERE id = ?';
+    db.get(checkVetQuery, [vetId], (err, vet) => {
+        if (err) {
+            console.error("Error checking vet:", err);
+            return res.status(500).json({
+                success: false,
+                message: 'Error submitting feedback'
+            });
+        }
+
+        if (!vet) {
+            return res.status(404).json({
+                success: false,
+                message: 'Vet not found'
+            });
+        }
+
+        // Check if user has already submitted feedback for this vet
+        const checkExistingQuery = 'SELECT id FROM feedback WHERE user_id = ? AND vet_id = ?';
+        db.get(checkExistingQuery, [userId, vetId], (err, existing) => {
+            if (err) {
+                console.error("Error checking existing feedback:", err);
+                return res.status(500).json({
+                    success: false,
+                    message: 'Error submitting feedback'
+                });
+            }
+
+            if (existing) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'You have already submitted feedback for this vet'
+                });
+            }
+
+            // Insert the feedback
+            const insertQuery = `
+                INSERT INTO feedback (user_id, vet_id, rating, comment)
+                VALUES (?, ?, ?, ?)
+            `;
+            db.run(insertQuery, [userId, vetId, rating, comment || null], function(err) {
+                if (err) {
+                    console.error("Error inserting feedback:", err);
+                    return res.status(500).json({
+                        success: false,
+                        message: 'Error submitting feedback'
+                    });
+                }
+
+                // Update vet's average rating
+                const updateRatingQuery = `
+                    UPDATE vets 
+                    SET rating = (
+                        SELECT AVG(rating) 
+                        FROM feedback 
+                        WHERE vet_id = ?
+                    )
+                    WHERE id = ?
+                `;
+                db.run(updateRatingQuery, [vetId, vetId], (err) => {
+                    if (err) {
+                        console.error("Error updating vet rating:", err);
+                    }
+                });
+
+                res.status(201).json({
+                    success: true,
+                    message: 'Feedback submitted successfully',
+                    feedbackId: this.lastID
+                });
+            });
+        });
+    });
+});
+
+// Get all feedback for a vet
+server.get('/vets/:vetid/feedback', verifyToken, (req, res) => {
+    const vetId = parseInt(req.params.vetid, 10);
+
+    const query = `
+        SELECT f.*, u.name as user_name
+        FROM feedback f
+        JOIN user u ON f.user_id = u.id
+        WHERE f.vet_id = ?
+        ORDER BY f.id DESC
+    `;
+
+    db.all(query, [vetId], (err, feedback) => {
+        if (err) {
+            console.error("Error fetching feedback:", err);
+            return res.status(500).json({
+                success: false,
+                message: 'Error fetching feedback'
+            });
+        }
+
+        res.json({
+            success: true,
+            feedback: feedback
+        });
+    });
+});
+
+// Get available slots for a vet
+server.get('/vets/:vetid/available-slots', verifyToken, (req, res) => {
+    const vetId = parseInt(req.params.vetid, 10);
+    const { date } = req.query;
+
+    if (!date) {
+        return res.status(400).json({
+            success: false,
+            message: 'Date parameter is required'
+        });
+    }
+
+    const selectedDate = new Date(date);
+    if (isNaN(selectedDate.getTime())) {
+        return res.status(400).json({
+            success: false,
+            message: 'Invalid date format'
+        });
+    }
+
+    const checkVetQuery = 'SELECT id FROM vets WHERE id = ?';
+    db.get(checkVetQuery, [vetId], (err, vet) => {
+        if (err) {
+            console.error("Error checking vet:", err);
+            return res.status(500).json({
+                success: false,
+                message: 'Error fetching available slots'
+            });
+        }
+
+        if (!vet) {
+            return res.status(404).json({
+                success: false,
+                message: 'Vet not found'
+            });
+        }
+
+        const getBookedSlotsQuery = `
+            SELECT appointmenttime as time 
+            FROM appointments 
+            WHERE vetid = ? 
+            AND date(appointmentdate) = date(?)
+        `;
+
+        db.all(getBookedSlotsQuery, [vetId, date], (err, bookedSlots) => {
+            if (err) {
+                console.error("Error fetching booked slots:", err);
+                return res.status(500).json({
+                    success: false,
+                    message: 'Error fetching available slots'
+                });
+            }
+
+            const workingHours = {
+                start: '09:00',
+                end: '17:00',
+                slotDuration: 30 // in minutes
+            };
+
+            const slots = [];
+            const startTime = new Date(`${date}T${workingHours.start}`);
+            const endTime = new Date(`${date}T${workingHours.end}`);
+            const slotDuration = workingHours.slotDuration * 60 * 1000; // convert to milliseconds
+
+            for (let time = startTime; time < endTime; time = new Date(time.getTime() + slotDuration)) {
+                const timeString = time.toTimeString().slice(0, 5);
+                const isBooked = bookedSlots.some(slot => slot.time === timeString);
+                
+                if (!isBooked) {
+                    slots.push(timeString);
+                }
+            }
+
+            res.json({
+                success: true,
+                vetId: vetId,
+                date: date,
+                availableSlots: slots
+            });
+        });
+    });
+});
+
 //starting server  
 server.listen(port, () => {
     console.log(`Server is running on port ${port}`);

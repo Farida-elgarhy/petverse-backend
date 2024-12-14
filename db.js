@@ -9,9 +9,7 @@ const createusertable = `
     name TEXT NOT NULL, 
     email TEXT UNIQUE NOT NULL, 
     password TEXT NOT NULL,
-    age INTEGER,
-    isadmin INTEGER DEFAULT 0
-
+    age INTEGER
   )`;
 
 // creating pets table
